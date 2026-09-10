@@ -1,0 +1,81 @@
+.mm-auth-bg {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  padding: 24px;
+}
+
+.mm-auth-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 36px 32px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+}
+
+.mm-auth-brand h1 {
+  font-size: 22px;
+  margin: 12px 0 4px;
+}
+.mm-auth-brand p {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 24px;
+}
+.mm-auth-logo {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mm-auth-btn { width: 100%; }
+.mm-auth-hint { color: var(--muted); font-size: 13px; }
+
+.mm-admin-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.mm-admin-nav-btn {
+  background: transparent;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.mm-admin-nav-btn.active {
+  background: var(--surface);
+  color: var(--ink);
+}
+.mm-admin-nav-user {
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--muted);
+}
+.mm-admin-nav-signout {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}

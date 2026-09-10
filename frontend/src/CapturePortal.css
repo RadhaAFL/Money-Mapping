@@ -1,0 +1,108 @@
+.mm-capture-page {
+  min-height: 100vh;
+  background: var(--surface);
+}
+
+.mm-capture-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.mm-capture-title { font-weight: 700; font-size: 16px; }
+.mm-capture-sub { font-size: 13px; color: var(--muted); }
+
+.mm-capture-main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.mm-field select, .mm-field input[type="text"] {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.mm-photo-preview {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.mm-photo-placeholder {
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.mm-scanner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mm-scanner-video {
+  width: 100%;
+  border-radius: 10px;
+  background: #000;
+  max-height: 260px;
+}
+
+.mm-manual-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.mm-manual-add input { flex: 1; }
+
+.mm-style-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mm-style-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.mm-style-list button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.mm-submit { width: 100%; }
