@@ -1,19 +1,48 @@
 :root {
-  --accent: #b7001a;
-  --accent-ink: #8c0014;
-  --ink: #211918;
-  --muted: #746967;
-  --line: #e4dbda;
-  --surface: #f7f3f2;
-  --paper: #ffffff;
-  --good: #1f7a4c;
-  --good-soft: #e3f3ea;
+  /* Primary — the brand red seed and its tonal steps */
+  --primary: #b7001a;
+  --primary-dark: #930012;
+  --primary-hover: #c0001b;
+  --primary-container: #ffdad7;
+  --primary-container-tint: #fff7f6;
+  --on-primary: #ffffff;
+
+  /* Tertiary accent — Head Office / secondary emphasis */
+  --tertiary: #2a2f8f;
+  --tertiary-container: #e6e7fb;
+  --tertiary-dark: #232876;
+
+  /* Success */
+  --good: #1f8a3b;
+  --good-dark: #185730;
+  --good-container: #dcf0e3;
+
+  /* Warn */
   --warn: #9a6a00;
-  --warn-soft: #fbf0d9;
-  --danger: #b7001a;
-  --danger-soft: #fbe4e7;
-  --radius: 10px;
-  --shadow: 0 1px 2px rgba(33, 25, 24, 0.06), 0 6px 20px -10px rgba(33, 25, 24, 0.18);
+  --warn-container: #fbf0d9;
+
+  /* Error (kept distinct from brand primary, per Material's own convention) */
+  --danger: #ba1a1a;
+  --danger-dark: #93000a;
+  --danger-container: #ffdad6;
+
+  /* Neutrals — warm off-white surfaces, warm-brown ink/outline */
+  --ink: #1c1b1b;
+  --muted: #5e3f3c;
+  --outline: #936e6b;
+  --outline-soft: #e2e4e9;
+  --line: #e5e2e1;
+  --surface: #f6f3f2;
+  --surface-dim: #f0eded;
+  --paper: #fcf9f8;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgba(28, 27, 27, 0.06), 0 8px 24px -12px rgba(28, 27, 27, 0.22);
+
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-label: 'Montserrat', sans-serif;
 }
 
 * {
@@ -24,8 +53,13 @@ body {
   margin: 0;
   background: var(--surface);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  margin: 0;
 }
 
 button {
@@ -37,44 +71,87 @@ input, select, textarea {
   font-size: 15px;
 }
 
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-  border: none;
+/* Material Symbols Outlined — usage: <span class="msi">camera</span> */
+.msi {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  vertical-align: middle;
+  -webkit-font-smoothing: antialiased;
+}
+
+.eyebrow {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.card {
+  background: var(--paper);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 12px 20px;
+  box-shadow: var(--shadow);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  border-radius: 999px;
+  padding: 12px 24px;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
-.btn-primary:disabled { opacity: 0.55; cursor: default; }
-.btn-primary:not(:disabled):hover { background: var(--accent-ink); }
+.btn-primary:disabled { opacity: 0.45; cursor: default; }
+.btn-primary:not(:disabled):hover { background: var(--primary-hover); }
+.btn-primary:not(:disabled):active { background: var(--primary-dark); }
 
 .btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   background: transparent;
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 10px 16px;
+  color: var(--primary);
+  border: 1.5px solid var(--outline);
+  border-radius: 999px;
+  padding: 10px 20px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
-.btn-outline:hover { background: var(--paper); }
+.btn-outline:hover { background: var(--primary-container-tint); }
 
 .error-bar {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border-radius: var(--radius);
+  background: var(--danger-container);
+  color: var(--danger-dark);
+  border-radius: var(--radius-sm);
   padding: 10px 14px;
   font-size: 14px;
   margin: 10px 0;
 }
 
 .saved-bar {
-  background: var(--good-soft);
-  color: var(--good);
-  border-radius: var(--radius);
+  background: var(--good-container);
+  color: var(--good-dark);
+  border-radius: var(--radius-sm);
   padding: 10px 14px;
   font-size: 14px;
   margin: 10px 0;

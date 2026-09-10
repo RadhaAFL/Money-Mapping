@@ -65,6 +65,7 @@ export default function FixtureMasterPage({ user }) {
 
   return (
     <div className="mm-fixture-page">
+      <div className="eyebrow">Head office · reference data</div>
       <h1>Fixture areas</h1>
       <p className="mm-fixture-sub">
         Set the floor area of each fixture per store. This is what lets the Power BI
@@ -72,7 +73,7 @@ export default function FixtureMasterPage({ user }) {
         sales data are flowing — without it those numbers can't be calculated.
       </p>
 
-      <div className="mm-fixture-add">
+      <div className="mm-fixture-add card">
         <input type="text" placeholder="Store code" value={storeCode} onChange={e => setStoreCode(e.target.value)} />
         <select value={fixtureType} onChange={e => setFixtureType(e.target.value)}>
           <option value="">Fixture type…</option>
@@ -81,6 +82,7 @@ export default function FixtureMasterPage({ user }) {
         <input type="text" placeholder="Label (e.g. Wall 1)" value={fixtureLabel} onChange={e => setFixtureLabel(e.target.value)} />
         <input type="number" min="0" step="0.1" placeholder="Area (sq ft)" value={areaSqft} onChange={e => setAreaSqft(e.target.value)} />
         <button className="btn-primary" onClick={submit} disabled={saving}>
+          <span className="msi">straighten</span>
           {saving ? 'Saving…' : 'Save'}
         </button>
       </div>
@@ -90,7 +92,7 @@ export default function FixtureMasterPage({ user }) {
       {loading && <div className="mm-fixture-state">Loading…</div>}
 
       {!loading && (
-        <table className="mm-fixture-table">
+        <table className="mm-fixture-table card">
           <thead>
             <tr><th>Store</th><th>Fixture</th><th>Label</th><th>Area (sq ft)</th><th>Updated</th></tr>
           </thead>

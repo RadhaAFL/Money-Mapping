@@ -130,7 +130,10 @@ export default function CapturePortal({ user }) {
     <div className="mm-capture-page">
       <header className="mm-capture-header">
         <div>
-          <div className="mm-capture-title">Money Mapping</div>
+          <div className="mm-capture-title">
+            <span className="msi">storefront</span>
+            Money Mapping
+          </div>
           <div className="mm-capture-sub">{user.displayName}</div>
         </div>
         <button className="btn-outline" onClick={() => msalInstance.logoutRedirect()}>Sign out</button>
@@ -138,38 +141,51 @@ export default function CapturePortal({ user }) {
 
       <main className="mm-capture-main">
         {storeOptions.length > 1 && (
-          <label className="mm-field">
-            <span>Store</span>
+          <label className="mm-field card">
+            <span className="eyebrow">Store</span>
             <select value={storeCode} onChange={e => setStoreCode(e.target.value)}>
               {storeOptions.map(code => <option key={code} value={code}>{code}</option>)}
             </select>
           </label>
         )}
 
-        <label className="mm-field">
-          <span>Fixture</span>
+        <label className="mm-field card">
+          <span className="eyebrow">Fixture</span>
           <select value={fixtureType} onChange={e => setFixtureType(e.target.value)}>
             <option value="">Select a fixture…</option>
             {fixtureTypes.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </label>
 
-        <label className="mm-field">
-          <span>Photo</span>
+        <label className="mm-field card">
+          <span className="eyebrow">Photo</span>
           {photoPreviewUrl
             ? <img className="mm-photo-preview" src={photoPreviewUrl} alt="Fixture capture preview" />
-            : <div className="mm-photo-placeholder">No photo yet</div>}
+            : (
+              <div className="mm-photo-placeholder">
+                <span className="msi">add_a_photo</span>
+                No photo yet
+              </div>
+            )}
           <input type="file" accept="image/*" capture="environment" onChange={onPhotoChange} />
         </label>
 
-        <div className="mm-field">
-          <span>Styles on this fixture</span>
+        <div className="mm-field card">
+          <span className="eyebrow">Styles on this fixture</span>
           {!scannerActive
-            ? <button className="btn-outline" onClick={() => setScannerActive(true)}>Start barcode scan</button>
+            ? (
+              <button className="btn-outline" onClick={() => setScannerActive(true)}>
+                <span className="msi">qr_code_scanner</span>
+                Start barcode scan
+              </button>
+            )
             : (
               <div className="mm-scanner">
                 <video ref={videoRef} className="mm-scanner-video" />
-                <button className="btn-outline" onClick={() => setScannerActive(false)}>Stop scanning</button>
+                <button className="btn-outline" onClick={() => setScannerActive(false)}>
+                  <span className="msi">stop_circle</span>
+                  Stop scanning
+                </button>
               </div>
             )}
 
@@ -181,7 +197,10 @@ export default function CapturePortal({ user }) {
               onChange={e => setManualStyle(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addManualStyle()}
             />
-            <button className="btn-outline" onClick={addManualStyle}>Add</button>
+            <button className="btn-outline" onClick={addManualStyle}>
+              <span className="msi">add</span>
+              Add
+            </button>
           </div>
 
           {scannedStyles.length > 0 && (
@@ -189,7 +208,9 @@ export default function CapturePortal({ user }) {
               {scannedStyles.map(style => (
                 <li key={style}>
                   <span>{style}</span>
-                  <button onClick={() => removeStyle(style)} aria-label={`Remove ${style}`}>✕</button>
+                  <button onClick={() => removeStyle(style)} aria-label={`Remove ${style}`}>
+                    <span className="msi">close</span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -200,6 +221,7 @@ export default function CapturePortal({ user }) {
         {saved && <div className="saved-bar">{saved}</div>}
 
         <button className="btn-primary mm-submit" onClick={submit} disabled={!canSubmit}>
+          <span className="msi">cloud_upload</span>
           {saving ? 'Saving…' : 'Submit capture'}
         </button>
       </main>

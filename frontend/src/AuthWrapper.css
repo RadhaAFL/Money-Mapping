@@ -3,43 +3,50 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-dim) 100%);
   padding: 24px;
 }
 
 .mm-auth-card {
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
-  padding: 36px 32px;
-  max-width: 380px;
+  padding: 40px 36px;
+  max-width: 400px;
   width: 100%;
   text-align: center;
 }
 
 .mm-auth-brand h1 {
-  font-size: 22px;
-  margin: 12px 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+  margin: 10px 0 6px;
+  color: var(--ink);
+}
+.mm-auth-brand h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 10px 0 6px;
 }
 .mm-auth-brand p {
   color: var(--muted);
   font-size: 14px;
-  margin: 0 0 24px;
+  margin: 0 0 22px;
+}
+.mm-auth-brand .eyebrow {
+  display: block;
+  margin-top: 4px;
 }
 .mm-auth-logo {
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   margin: 0 auto;
-  border-radius: 12px;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 700;
-  font-size: 18px;
+  border-radius: 16px;
+  background: var(--primary);
+  color: var(--on-primary);
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.mm-auth-logo .msi { font-size: 28px; }
+.mm-auth-logo-denied { background: var(--danger); }
 
 .mm-auth-btn { width: 100%; }
 .mm-auth-hint { color: var(--muted); font-size: 13px; }
@@ -48,23 +55,56 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
+  padding: 14px 24px;
   background: var(--paper);
   border-bottom: 1px solid var(--line);
 }
+.mm-admin-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--ink);
+  margin-right: 8px;
+}
+.mm-admin-nav-brand .msi { color: var(--primary); font-size: 22px; }
+
+.mm-role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--tertiary-container);
+  color: var(--tertiary-dark);
+  font-family: var(--font-label);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 999px;
+  margin-right: 12px;
+}
+.mm-role-badge .msi { font-size: 15px; }
+
 .mm-admin-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: transparent;
   border: none;
-  padding: 8px 14px;
-  border-radius: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
   font-weight: 600;
   font-size: 14px;
   color: var(--muted);
   cursor: pointer;
 }
+.mm-admin-nav-btn .msi { font-size: 18px; }
 .mm-admin-nav-btn.active {
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--primary-container-tint);
+  color: var(--primary);
 }
 .mm-admin-nav-user {
   margin-left: auto;
@@ -73,9 +113,12 @@
 }
 .mm-admin-nav-signout {
   background: transparent;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 6px 12px;
+  border: 1.5px solid var(--outline);
+  border-radius: 999px;
+  padding: 7px 14px;
   font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
   cursor: pointer;
 }
+.mm-admin-nav-signout:hover { background: var(--surface); }

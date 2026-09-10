@@ -12,13 +12,17 @@ const API = '/moneymapping-api'
 function LoginPage({ onLogin, loading }) {
   return (
     <div className="mm-auth-bg">
-      <div className="mm-auth-card">
+      <div className="mm-auth-card card">
         <div className="mm-auth-brand">
-          <div className="mm-auth-logo">MM</div>
+          <div className="mm-auth-logo">
+            <span className="msi">storefront</span>
+          </div>
+          <div className="eyebrow">Sign in</div>
           <h1>Money Mapping</h1>
           <p>Flying Machine — fixture performance capture</p>
         </div>
         <button className="btn-primary mm-auth-btn" onClick={onLogin} disabled={loading}>
+          {!loading && <span className="msi">badge</span>}
           {loading ? 'Redirecting…' : 'Sign in with Microsoft'}
         </button>
       </div>
@@ -29,8 +33,14 @@ function LoginPage({ onLogin, loading }) {
 function AccessDenied({ email }) {
   return (
     <div className="mm-auth-bg">
-      <div className="mm-auth-card">
-        <h2>Access denied</h2>
+      <div className="mm-auth-card card">
+        <div className="mm-auth-brand">
+          <div className="mm-auth-logo mm-auth-logo-denied">
+            <span className="msi">block</span>
+          </div>
+          <div className="eyebrow">Access denied</div>
+          <h2>Not set up yet</h2>
+        </div>
         <p><strong>{email}</strong> is not set up in Money Mapping yet.</p>
         <p className="mm-auth-hint">
           This app grants store access based on the store login recorded in
@@ -94,16 +104,26 @@ export default function AuthWrapper() {
   return (
     <div>
       <div className="mm-admin-nav">
+        <div className="mm-admin-nav-brand">
+          <span className="msi">storefront</span>
+          <span>Money Mapping</span>
+        </div>
+        <div className="mm-role-badge">
+          <span className="msi">apartment</span>
+          Head Office
+        </div>
         <button
           className={view === 'review' ? 'mm-admin-nav-btn active' : 'mm-admin-nav-btn'}
           onClick={() => setView('review')}
         >
+          <span className="msi">fact_check</span>
           Review captures
         </button>
         <button
           className={view === 'fixtures' ? 'mm-admin-nav-btn active' : 'mm-admin-nav-btn'}
           onClick={() => setView('fixtures')}
         >
+          <span className="msi">straighten</span>
           Fixture areas
         </button>
         <span className="mm-admin-nav-user">{access.displayName}</span>

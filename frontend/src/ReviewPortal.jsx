@@ -15,7 +15,9 @@ function CaptureDetail({ user, capture, onClose }) {
   return (
     <div className="mm-detail-backdrop" onClick={onClose}>
       <div className="mm-detail-card" onClick={e => e.stopPropagation()}>
-        <button className="mm-detail-close" onClick={onClose}>✕</button>
+        <button className="mm-detail-close" onClick={onClose}>
+          <span className="msi">close</span>
+        </button>
         <img
           className="mm-detail-photo"
           src={`${API}/captures/${capture.capture_id}/photo?email=${encodeURIComponent(user.email)}`}
@@ -74,7 +76,8 @@ function PlanogramUpload({ user }) {
   }
 
   return (
-    <div className="mm-planogram-panel">
+    <div className="mm-planogram-panel card">
+      <div className="eyebrow">Reference layout</div>
       <h3>Upload planogram</h3>
       <div className="mm-planogram-row">
         <select value={fixtureType} onChange={e => setFixtureType(e.target.value)}>
@@ -90,6 +93,7 @@ function PlanogramUpload({ user }) {
         <input type="date" value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} />
         <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} />
         <button className="btn-primary" onClick={submit} disabled={saving}>
+          <span className="msi">upload_file</span>
           {saving ? 'Uploading…' : 'Upload'}
         </button>
       </div>
@@ -132,6 +136,7 @@ export default function ReviewPortal({ user }) {
   return (
     <div className="mm-review-page">
       <main className="mm-review-main">
+        <div className="eyebrow">Head office · review</div>
         <h1>Captures</h1>
 
         <div className="mm-review-filters">
@@ -150,12 +155,15 @@ export default function ReviewPortal({ user }) {
         {error && <div className="error-bar">{error}</div>}
         {loading && <div className="mm-review-state">Loading…</div>}
         {!loading && captures.length === 0 && !error && (
-          <div className="mm-review-state">No captures match these filters yet.</div>
+          <div className="mm-review-state">
+            <span className="msi">add_a_photo</span>
+            No captures match these filters yet.
+          </div>
         )}
 
         <div className="mm-capture-grid">
           {captures.map(c => (
-            <div key={c.capture_id} className="mm-capture-card" onClick={() => setSelected(c)}>
+            <div key={c.capture_id} className="mm-capture-card card" onClick={() => setSelected(c)}>
               <img
                 className="mm-capture-thumb"
                 src={`${API}/captures/${c.capture_id}/photo?email=${encodeURIComponent(user.email)}`}

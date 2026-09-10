@@ -1,9 +1,9 @@
 .mm-review-main {
   max-width: 960px;
   margin: 0 auto;
-  padding: 24px 20px 60px;
+  padding: 28px 20px 60px;
 }
-.mm-review-main h1 { font-size: 22px; margin-bottom: 16px; }
+.mm-review-main h1 { font-size: 26px; margin: 6px 0 20px; font-weight: 700; }
 
 .mm-review-filters {
   display: flex;
@@ -11,17 +11,23 @@
   margin-bottom: 20px;
 }
 .mm-review-filters input, .mm-review-filters select {
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--outline-soft);
+  border-radius: var(--radius-sm);
   font-size: 14px;
+  background: var(--paper);
 }
 
 .mm-review-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   color: var(--muted);
-  padding: 24px 0;
+  padding: 40px 0;
   text-align: center;
 }
+.mm-review-state .msi { font-size: 32px; color: var(--outline); }
 
 .mm-capture-grid {
   display: grid;
@@ -29,13 +35,11 @@
   gap: 14px;
 }
 .mm-capture-card {
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 10px;
   overflow: hidden;
   cursor: pointer;
-  box-shadow: var(--shadow);
+  transition: transform 0.12s ease;
 }
+.mm-capture-card:hover { transform: translateY(-2px); }
 .mm-capture-thumb {
   width: 100%;
   height: 140px;
@@ -43,14 +47,14 @@
   display: block;
   background: var(--surface);
 }
-.mm-capture-card-body { padding: 10px 12px; }
+.mm-capture-card-body { padding: 12px 14px; }
 .mm-capture-card-title { font-weight: 600; font-size: 14px; }
 .mm-capture-card-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 
 .mm-detail-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(33, 25, 24, 0.55);
+  background: rgba(28, 27, 27, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -59,13 +63,14 @@
 }
 .mm-detail-card {
   background: var(--paper);
-  border-radius: 12px;
+  border-radius: var(--radius);
   max-width: 480px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
   position: relative;
   padding: 20px;
+  box-shadow: var(--shadow);
 }
 .mm-detail-close {
   position: absolute;
@@ -73,14 +78,19 @@
   border: none;
   background: var(--surface);
   border-radius: 50%;
-  width: 28px; height: 28px;
+  width: 30px; height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  color: var(--ink);
 }
+.mm-detail-close .msi { font-size: 18px; }
 .mm-detail-photo {
   width: 100%;
   max-height: 320px;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   margin-bottom: 14px;
 }
 .mm-detail-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
@@ -90,10 +100,9 @@
 
 .mm-planogram-panel {
   margin-top: 36px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
+  padding: 22px 24px;
 }
-.mm-planogram-panel h3 { font-size: 16px; margin-bottom: 12px; }
+.mm-planogram-panel h3 { font-size: 18px; margin: 4px 0 14px; font-weight: 700; }
 .mm-planogram-row {
   display: flex;
   flex-wrap: wrap;
@@ -101,8 +110,9 @@
   align-items: center;
 }
 .mm-planogram-row select, .mm-planogram-row input[type="text"], .mm-planogram-row input[type="date"] {
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--outline-soft);
+  border-radius: var(--radius-sm);
   font-size: 14px;
+  background: var(--paper);
 }
