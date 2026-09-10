@@ -36,8 +36,9 @@ function resizeImage(file) {
   })
 }
 
-export default function CapturePortal({ user }) {
+export default function CapturePortal({ user, allowAnyStore = false, embedded = false }) {
   const [fixtureTypes, setFixtureTypes] = useState([])
+  const [allStores, setAllStores] = useState([])
   const [storeCode, setStoreCode] = useState(user.storeCodes[0] || '')
   const [fixtureType, setFixtureType] = useState('')
   const [photoBlob, setPhotoBlob] = useState(null)
@@ -58,6 +59,14 @@ export default function CapturePortal({ user }) {
       .then(d => setFixtureTypes(d.fixture_types || []))
       .catch(() => setFixtureTypes([]))
   }, [])
+
+  useEffect(() => {
+    if (!allowAnyStore) return
+    fetch(`${API}/stores?email=${encodeURIComponent(user.email)}`)
+      .then(r => r.json())
+      .then(d => setAllStores(d.stores || []))
+      .catch(() => setAllStores([]))
+  }, [allowAnyStore, user.email])
 
   useEffect(() => {
     if (!scannerActive) return
@@ -128,19 +137,35 @@ export default function CapturePortal({ user }) {
 
   return (
     <div className="mm-capture-page">
-      <header className="mm-capture-header">
-        <div>
-          <div className="mm-capture-title">
-            <span className="msi">storefront</span>
-            Money Mapping
+      {!embedded && (
+        <header className="mm-capture-header">
+          <div>
+            <div className="mm-capture-title">
+              <span className="msi">storefront</span>
+              Money Mapping
+            </div>
+            <div className="mm-capture-sub">{user.displayName}</div>
           </div>
-          <div className="mm-capture-sub">{user.displayName}</div>
-        </div>
-        <button className="btn-outline" onClick={() => msalInstance.logoutRedirect()}>Sign out</button>
-      </header>
+          <button className="btn-outline" onClick={() => msalInstance.logoutRedirect()}>Sign out</button>
+        </header>
+      )}
 
       <main className="mm-capture-main">
-        {storeOptions.length > 1 && (
+        {allowAnyStore ? (
+          <label className="mm-field card">
+            <span className="eyebrow">Store (Head Office — any store)</span>
+            <input
+              type="text"
+              list="mm-all-stores"
+              placeholder="Type or pick a store code…"
+              value={storeCode}
+              onChange={e => setStoreCode(e.target.value.trim().toUpperCase())}
+            />
+            <datalist id="mm-all-stores">
+              {allStores.map(code => <option key={code} value={code} />)}
+            </datalist>
+          </label>
+        ) : storeOptions.length > 1 && (
           <label className="mm-field card">
             <span className="eyebrow">Store</span>
             <select value={storeCode} onChange={e => setStoreCode(e.target.value)}>

@@ -227,6 +227,13 @@ export default function AuthWrapper() {
           Review captures
         </button>
         <button
+          className={view === 'capture' ? 'mm-admin-nav-btn active' : 'mm-admin-nav-btn'}
+          onClick={() => setView('capture')}
+        >
+          <span className="msi">add_a_photo</span>
+          Capture for a store
+        </button>
+        <button
           className={view === 'fixtures' ? 'mm-admin-nav-btn active' : 'mm-admin-nav-btn'}
           onClick={() => setView('fixtures')}
         >
@@ -237,6 +244,7 @@ export default function AuthWrapper() {
         <button className="mm-admin-nav-signout" onClick={() => msalInstance.logoutRedirect()}>Sign out</button>
       </div>
       {view === 'review' && <ReviewPortal user={access} />}
+      {view === 'capture' && <CapturePortal user={access} allowAnyStore embedded />}
       {view === 'fixtures' && <FixtureMasterPage user={access} />}
     </div>
   )

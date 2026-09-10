@@ -196,6 +196,28 @@ def fixture_types():
     return jsonify({"fixture_types": FIXTURE_TYPES})
 
 
+@app.route('/stores', methods=['GET'])
+def list_stores():
+    """Admin-only: every distinct store code in dbo.DIM_RLS, normalized.
+    Lets an admin capture on behalf of any store (they already bypass
+    _check_store_access) without needing their own EMAIL_ID row there."""
+    email = request.args.get('email', '').strip().lower()
+    if not _is_admin(email):
+        return jsonify({"error": "Admin access required"}), 403
+    conn = None
+    try:
+        conn = _fab_conn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT STORE FROM dbo.DIM_RLS")
+        codes = sorted({_normalize_store_code(r[0]) for r in cursor.fetchall() if r[0]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+    return jsonify({"stores": codes})
+
+
 # ── Captures ────────────────────────────────────────────────────────────────
 
 @app.route('/captures', methods=['POST'])
