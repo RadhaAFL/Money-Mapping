@@ -9,38 +9,69 @@ import './AuthWrapper.css'
 
 const API = '/moneymapping-api'
 
+const STORE_CAPABILITIES = [
+  { label: 'Upload wall photos', allowed: true },
+  { label: 'View all stores & data', allowed: false },
+  { label: 'Edit & alter records', allowed: false },
+  { label: 'Download sheets & reports', allowed: false },
+]
+const HO_CAPABILITIES = [
+  { label: 'Upload wall photos', allowed: true },
+  { label: 'View all stores & data', allowed: true },
+  { label: 'Edit & alter records', allowed: true },
+  { label: 'Download sheets & reports', allowed: true },
+]
+
+function HeroSplit({ children }) {
+  return (
+    <div className="mm-hero-split">
+      <div className="mm-hero-panel">
+        <div className="mm-hero-brand">
+          <span className="msi">flight</span>
+          Flying Machine
+        </div>
+        <div className="mm-hero-copy">
+          <div className="mm-hero-headline">
+            The art of
+            <br />
+            <span className="mm-hero-fold">Fold</span> <span className="mm-hero-hang">Hang</span>
+          </div>
+          <div className="mm-hero-wordmark">
+            <span className="mm-hero-rule" />
+            Money Mapping
+          </div>
+        </div>
+      </div>
+      <div className="mm-hero-content">{children}</div>
+    </div>
+  )
+}
+
 function LoginPage({ onLogin, loading }) {
   return (
-    <div className="mm-auth-bg">
-      <div className="mm-auth-card card">
-        <div className="mm-auth-brand">
-          <div className="mm-auth-logo">
-            <span className="msi">storefront</span>
-          </div>
-          <div className="eyebrow">Sign in</div>
-          <h1>Money Mapping</h1>
-          <p>Flying Machine — fixture performance capture</p>
-        </div>
+    <HeroSplit>
+      <div className="mm-auth-card">
+        <div className="eyebrow">Sign in</div>
+        <h1>Money Mapping</h1>
+        <p>Flying Machine — fixture performance capture</p>
         <button className="btn-primary mm-auth-btn" onClick={onLogin} disabled={loading}>
           {!loading && <span className="msi">badge</span>}
           {loading ? 'Redirecting…' : 'Sign in with Microsoft'}
         </button>
       </div>
-    </div>
+    </HeroSplit>
   )
 }
 
 function AccessDenied({ email }) {
   return (
-    <div className="mm-auth-bg">
-      <div className="mm-auth-card card">
-        <div className="mm-auth-brand">
-          <div className="mm-auth-logo mm-auth-logo-denied">
-            <span className="msi">block</span>
-          </div>
-          <div className="eyebrow">Access denied</div>
-          <h2>Not set up yet</h2>
+    <HeroSplit>
+      <div className="mm-auth-card">
+        <div className="mm-auth-logo mm-auth-logo-denied">
+          <span className="msi">block</span>
         </div>
+        <div className="eyebrow">Access denied</div>
+        <h2>Not set up yet</h2>
         <p><strong>{email}</strong> is not set up in Money Mapping yet.</p>
         <p className="mm-auth-hint">
           This app grants store access based on the store login recorded in
@@ -49,7 +80,69 @@ function AccessDenied({ email }) {
         </p>
         <button className="btn-outline" onClick={() => msalInstance.logoutRedirect()}>Sign out</button>
       </div>
-    </div>
+    </HeroSplit>
+  )
+}
+
+function AccessConfirm({ access, storeCode, onStoreCodeChange, onEnter }) {
+  const capabilities = access.isAdmin ? HO_CAPABILITIES : STORE_CAPABILITIES
+  return (
+    <HeroSplit>
+      <div className="mm-auth-card mm-access-confirm">
+        <div className="eyebrow">Sign in</div>
+        <h1>Choose your access</h1>
+
+        <div className="mm-role-cards">
+          <div className={`mm-role-card ${!access.isAdmin ? 'active' : 'disabled'}`}>
+            <span className="msi">add_a_photo</span>
+            <div>
+              <div className="mm-role-card-title">Store</div>
+              <div className="mm-role-card-sub">Store · Mobile</div>
+            </div>
+          </div>
+          <div className={`mm-role-card ${access.isAdmin ? 'active' : 'disabled'}`}>
+            <span className="msi">apartment</span>
+            <div>
+              <div className="mm-role-card-title">Head Office</div>
+              <div className="mm-role-card-sub">Head Office</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mm-capability-panel">
+          <div className="eyebrow">This role can</div>
+          <ul>
+            {capabilities.map(c => (
+              <li key={c.label} className={c.allowed ? 'allowed' : 'denied'}>
+                <span className="msi">{c.allowed ? 'check_circle' : 'cancel'}</span>
+                {c.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {!access.isAdmin && (
+          <div className="mm-store-panel">
+            <div className="eyebrow">Your store</div>
+            {access.storeCodes.length > 1 ? (
+              <select value={storeCode} onChange={e => onStoreCodeChange(e.target.value)}>
+                {access.storeCodes.map(code => <option key={code} value={code}>{code}</option>)}
+              </select>
+            ) : (
+              <div className="mm-store-chip">
+                <span className="msi">storefront</span>
+                {access.storeCodes[0]}
+              </div>
+            )}
+          </div>
+        )}
+
+        <button className="btn-primary mm-auth-btn" onClick={onEnter}>
+          <span className="msi">login</span>
+          Enter as {access.isAdmin ? 'Head Office' : 'Store'}
+        </button>
+      </div>
+    </HeroSplit>
   )
 }
 
@@ -58,7 +151,9 @@ export default function AuthWrapper() {
   const isAuthenticated = useIsAuthenticated()
   const [signing, setSigning] = useState(false)
   const [access, setAccess] = useState(undefined) // undefined = loading
-  const [view, setView] = useState('review') // admin toggle: 'review' | 'access'
+  const [entered, setEntered] = useState(false)
+  const [storeCode, setStoreCode] = useState('')
+  const [view, setView] = useState('review') // admin toggle: 'review' | 'fixtures'
 
   useEffect(() => {
     if (!isAuthenticated || !accounts.length) {
@@ -77,6 +172,7 @@ export default function AuthWrapper() {
           storeCodes: data.store_codes || [],
         }
         setAccess(data.allowed ? user : null)
+        setStoreCode((data.store_codes || [])[0] || '')
         logEvent(user, 'login', { allowed: data.allowed, is_admin: data.is_admin })
       })
       .catch(() => setAccess(null))
@@ -97,8 +193,19 @@ export default function AuthWrapper() {
   if (access === undefined) return null
   if (access === null) return <AccessDenied email={accounts[0]?.username || ''} />
 
+  if (!entered) {
+    return (
+      <AccessConfirm
+        access={access}
+        storeCode={storeCode}
+        onStoreCodeChange={setStoreCode}
+        onEnter={() => setEntered(true)}
+      />
+    )
+  }
+
   if (!access.isAdmin) {
-    return <CapturePortal user={access} />
+    return <CapturePortal user={{ ...access, storeCodes: [storeCode, ...access.storeCodes.filter(c => c !== storeCode)] }} />
   }
 
   return (
