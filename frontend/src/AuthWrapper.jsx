@@ -4,7 +4,7 @@ import { loginRequest, msalInstance } from './authConfig'
 import { logEvent } from './logger'
 import CapturePortal from './CapturePortal'
 import ReviewPortal from './ReviewPortal'
-import AdminAccessPage from './AdminAccessPage'
+import FixtureMasterPage from './FixtureMasterPage'
 import './AuthWrapper.css'
 
 const API = '/moneymapping-api'
@@ -32,7 +32,11 @@ function AccessDenied({ email }) {
       <div className="mm-auth-card">
         <h2>Access denied</h2>
         <p><strong>{email}</strong> is not set up in Money Mapping yet.</p>
-        <p className="mm-auth-hint">Ask your admin to assign your store code.</p>
+        <p className="mm-auth-hint">
+          This app grants store access based on the store login recorded in
+          DIM_RLS — ask whoever maintains that table to confirm this email is
+          set as a store's EMAIL_ID.
+        </p>
         <button className="btn-outline" onClick={() => msalInstance.logoutRedirect()}>Sign out</button>
       </div>
     </div>
@@ -97,15 +101,16 @@ export default function AuthWrapper() {
           Review captures
         </button>
         <button
-          className={view === 'access' ? 'mm-admin-nav-btn active' : 'mm-admin-nav-btn'}
-          onClick={() => setView('access')}
+          className={view === 'fixtures' ? 'mm-admin-nav-btn active' : 'mm-admin-nav-btn'}
+          onClick={() => setView('fixtures')}
         >
-          Store access
+          Fixture areas
         </button>
         <span className="mm-admin-nav-user">{access.displayName}</span>
         <button className="mm-admin-nav-signout" onClick={() => msalInstance.logoutRedirect()}>Sign out</button>
       </div>
-      {view === 'review' ? <ReviewPortal user={access} /> : <AdminAccessPage user={access} />}
+      {view === 'review' && <ReviewPortal user={access} />}
+      {view === 'fixtures' && <FixtureMasterPage user={access} />}
     </div>
   )
 }

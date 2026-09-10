@@ -1,29 +1,29 @@
-.mm-access-page {
-  max-width: 720px;
+.mm-fixture-page {
+  max-width: 820px;
   margin: 0 auto;
   padding: 24px 20px 60px;
 }
-.mm-access-page h1 { font-size: 22px; margin-bottom: 4px; }
-.mm-access-sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+.mm-fixture-page h1 { font-size: 22px; margin-bottom: 4px; }
+.mm-fixture-sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; max-width: 60ch; }
 
-.mm-access-add {
+.mm-fixture-add {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 16px;
-  flex-wrap: wrap;
 }
-.mm-access-add input {
-  flex: 1;
-  min-width: 180px;
+.mm-fixture-add input, .mm-fixture-add select {
   padding: 9px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 14px;
 }
+.mm-fixture-add input[type="text"] { flex: 1; min-width: 140px; }
+.mm-fixture-add input[type="number"] { width: 130px; }
 
-.mm-access-state { color: var(--muted); padding: 20px 0; }
+.mm-fixture-state { color: var(--muted); padding: 20px 0; }
 
-.mm-access-table {
+.mm-fixture-table {
   width: 100%;
   border-collapse: collapse;
   background: var(--paper);
@@ -31,7 +31,7 @@
   border-radius: 10px;
   overflow: hidden;
 }
-.mm-access-table th {
+.mm-fixture-table th {
   text-align: left;
   font-size: 12px;
   text-transform: uppercase;
@@ -41,16 +41,8 @@
   background: var(--surface);
   border-bottom: 1px solid var(--line);
 }
-.mm-access-table td {
+.mm-fixture-table td {
   padding: 10px 14px;
   border-bottom: 1px solid var(--line);
   font-size: 14px;
-}
-.mm-access-remove {
-  border: none;
-  background: transparent;
-  color: var(--danger);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
 }

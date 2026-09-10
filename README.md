@@ -35,7 +35,7 @@ Microsoft Fabric Warehouse
         v
 Flask API — backend/app.py
         |
-        | admins, store_access, audit_logs
+        | admins, audit_logs
         v
 data/app.duckdb
 
@@ -50,12 +50,16 @@ Apache2 reverse proxy
 https://automationafl.arvindfashions.com/moneymapping
 ```
 
-DuckDB holds only access control (who's an admin, which store codes a user
-can submit for) and the audit log — never capture/planogram data. Captures
-and planograms are INSERT-only (captures) or DELETE-then-INSERT-by-key
-(planograms, since a planogram is "current state per fixture") directly
-against Fabric, the same pattern SEMANTIC-LAYER's KPI-input portal already
-proves works at this scale.
+DuckDB holds only the app-admin list (who can review/upload planograms/set
+fixture areas) and the audit log — never capture/planogram data, and never
+store-level access. **Who may capture for which store is not decided by
+this app at all** — it's read live from the org's existing
+`dbo.DIM_RLS` table in Fabric (see Row-level access below), the same table
+already used for Power BI RLS elsewhere. Captures and planograms are
+INSERT-only (captures) or DELETE-then-INSERT-by-key (planograms, since a
+planogram is "current state per fixture") directly against Fabric, the same
+pattern SEMANTIC-LAYER's KPI-input portal already proves works at this
+scale.
 
 ## Project structure
 
@@ -69,15 +73,16 @@ Money_Mapping/
     src/
       main.jsx            # MSAL init + render root
       authConfig.js        # MSAL config, env-driven
-      AuthWrapper.jsx       # login gate, routes to Capture/Review/Access
+      AuthWrapper.jsx       # login gate, routes to Capture/Review/Fixtures
       CapturePortal.jsx      # store-user capture screen
       ReviewPortal.jsx        # HO review + planogram upload
-      AdminAccessPage.jsx      # assign store users to store codes
+      FixtureMasterPage.jsx    # HO: set fixture area (sq ft) per store
       logger.js                 # fire-and-forget audit log calls
     vite.config.js
     package.json
   docs/
-    fabric_schema.sql       # manual pre-req DDL
+    fabric_schema.sql       # manual pre-req DDL (Money Mapping's own tables —
+                             # NOT dbo.DIM_RLS, which already exists)
   data/                     # gitignored — app.duckdb + uploads/ live here
 ```
 
@@ -116,10 +121,10 @@ python app.py
 Runs on `http://localhost:5002`. On first boot it creates `data/app.duckdb`
 and seeds one bootstrap admin
 (`radhakishan.thakur@arvindfashions.com` — change `BOOTSTRAP_ADMIN` in
-`app.py` if that should be someone else). Fabric-backed endpoints
-(`/captures`, `/planograms`) need real `.env` credentials and the "ODBC
-Driver 18 for SQL Server" installed; everything else (`/check-access`,
-`/store-access`, `/fixture-types`, `/logs`) works without Fabric.
+`app.py` if that should be someone else). Almost everything needs real
+Fabric `.env` credentials and the "ODBC Driver 18 for SQL Server" installed
+— including `/check-access` now, since store access is resolved live from
+`dbo.DIM_RLS`. Only `/fixture-types` and `/logs` work without Fabric.
 
 ### Frontend
 
@@ -147,10 +152,7 @@ Base path in production: `/moneymapping-api`
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| `GET` | `/check-access?email=` | `{allowed, is_admin, store_codes}` |
-| `GET` | `/store-access?caller_email=` | Admin: list all store-access rows |
-| `POST` | `/store-access` | Admin: `{email, store_codes[], caller_email}` |
-| `DELETE` | `/store-access/<email>?caller_email=` | Admin: remove a user's access |
+| `GET` | `/check-access?email=` | `{allowed, is_admin, store_codes}` — `store_codes` comes live from `dbo.DIM_RLS` |
 | `GET` | `/fixture-types` | Static list of the 7 fixture types |
 | `POST` | `/captures` | multipart: `email, name, store_code, fixture_type, styles (JSON array), photo` |
 | `GET` | `/captures?email=&store_code=&fixture_type=&from_date=&to_date=` | List, RLS-filtered server-side |
@@ -159,23 +161,43 @@ Base path in production: `/moneymapping-api`
 | `POST` | `/planograms` | Admin, multipart: `caller_email, email, fixture_type, store_code (optional), effective_date, file` |
 | `GET` | `/planograms?email=` | List |
 | `GET` | `/planograms/<id>/file?email=` | File download |
+| `POST` | `/fixture-master` | Admin: `{store_code, fixture_type, fixture_label, area_sqft, caller_email}` — upsert by `(store_code, fixture_label)` |
+| `GET` | `/fixture-master?email=&store_code=` | List, RLS-filtered server-side same as `/captures` |
 | `POST` | `/logs`, `GET /logs?caller_email=` | Audit log write / admin read |
 
 Note the `email` vs. `caller_email` split on admin endpoints that also
-carry a target user's email (`/store-access` POST): `caller_email` is
-always the authenticated admin performing the action, `email` is whoever
-is being granted/queried access. Conflating the two was an actual bug
-caught during development — SEMANTIC-LAYER's own `_require_admin()` uses
-the same `caller_email` convention for the same reason.
+carry a target user's email (e.g. `/fixture-master` POST): `caller_email`
+is always the authenticated admin performing the action, `email` is
+whoever else is referenced. Conflating the two was an actual bug caught
+during development — SEMANTIC-LAYER's own `_require_admin()` uses the same
+`caller_email` convention for the same reason.
 
 ## Row-level access
 
-`store_access` maps an email to a JSON array of `XSTORE_STORECODE` values.
-Unlike SEMANTIC-LAYER's read-side RLS (where an empty restriction list
-means "no restriction, see everything"), this app's write-time check
-(`_check_store_access` in `app.py`) treats **no row at all** as **zero
-access** — a new user must be explicitly granted at least one store code
-before they can submit anything. Admins bypass this check entirely.
+Store-level access is **not** app-managed data — it's read live from the
+org's existing `dbo.DIM_RLS` table in Fabric, the same table other Power BI
+reports already use for RLS. One row per store, with `EMAIL_ID` as that
+store's own login and a wide stack of escalation columns (`RM EMAIL`,
+`ARM EMAIL`, `CM EMAIL`, `HEAD EMAIL`, ... `IT SUPPORT 1..15`, `Audit`) for
+the reporting hierarchy above it.
+
+`_stores_for_email()` in `app.py` queries `dbo.DIM_RLS` for
+`WHERE LOWER(EMAIL_ID) = <caller>` — **deliberately only `EMAIL_ID`**, not
+the escalation columns. Those columns grant a manager visibility into a
+store's data on the Power BI side; they do not grant permission to submit a
+capture *as* that store. A user with no matching `EMAIL_ID` row gets zero
+stores back — there is no implicit "no restriction = see everything"
+fallback here, unlike SEMANTIC-LAYER's read-side RLS convention. Admins
+(the small `admins` table in DuckDB) bypass this check entirely, for the
+Review/Fixture-areas/Planogram-upload screens.
+
+`STORE` in `dbo.DIM_RLS` carries channel-variant prefixes around the same
+physical store — `8172`, `NON-8172`, `O8172`, `T8172` all mean the same
+store. `_normalize_store_code()` strips `NON-`/leading `O`/leading `T`
+before comparing against `XSTORE_STORECODE`, mirroring the equivalent
+`BASE_STORE_CODE` calculated column on the Power BI side (see the RLS role
+definition, not checked into this repo, built directly in Power BI
+Desktop).
 
 ## Deployment (same VM as SEMANTIC-LAYER, new path)
 

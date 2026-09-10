@@ -82,12 +82,6 @@ def init_db():
     con = get_con()
     con.execute("CREATE TABLE IF NOT EXISTS admins (email VARCHAR PRIMARY KEY)")
     con.execute("""
-        CREATE TABLE IF NOT EXISTS store_access (
-            email        VARCHAR PRIMARY KEY,
-            store_codes  VARCHAR
-        )
-    """)
-    con.execute("""
         CREATE TABLE IF NOT EXISTS audit_logs (
             id      INTEGER,
             ts      TIMESTAMP,
@@ -122,10 +116,10 @@ def _is_admin(email: str) -> bool:
 
 def _require_admin():
     """Mirrors SEMANTIC-LAYER's _require_admin(). Deliberately reads
-    'caller_email' rather than 'email' — several admin endpoints (e.g.
-    set_store_access) also carry a target user's 'email' in the same
-    request, and conflating the two would let the admin-check accidentally
-    run against the target user instead of the actual caller."""
+    'caller_email' rather than 'email' — some admin endpoints also carry a
+    target user's 'email' in the same request, and conflating the two would
+    let the admin-check accidentally run against the target instead of the
+    actual caller."""
     if request.method in ('POST', 'PUT', 'PATCH'):
         email = request.form.get('caller_email', '') or (request.get_json(silent=True) or {}).get('caller_email', '') or request.args.get('caller_email', '')
     else:
@@ -135,28 +129,53 @@ def _require_admin():
     return None
 
 
-def _get_store_codes(email: str) -> list:
+def _normalize_store_code(raw: str) -> str:
+    """dbo.DIM_RLS.STORE carries channel-variant prefixes around the same
+    physical store code ('NON-8172', 'O8172', 'T8172', plain '8172') — strip
+    them so all variants of one store resolve to the same code Money Mapping
+    uses (XSTORE_STORECODE)."""
+    s = (raw or '').strip().upper()
+    if s.startswith('NON-'):
+        return s[4:]
+    if s[:1] in ('O', 'T') and s[1:].isdigit():
+        return s[1:]
+    return s
+
+
+def _stores_for_email(email: str) -> set:
+    """Store codes this email is the store-side login for, per the org's
+    existing dbo.DIM_RLS.EMAIL_ID — the single source of truth for who may
+    capture for a store. Deliberately does NOT check the RM/ARM/CM/... columns
+    on that table: those grant Power BI *viewing* visibility up the hierarchy,
+    not permission to submit a capture as that store."""
     email = (email or '').strip().lower()
-    with _db_lock:
-        row = get_con().execute(
-            "SELECT store_codes FROM store_access WHERE LOWER(email)=?", [email]
-        ).fetchone()
-    return json.loads(row[0]) if row and row[0] else []
+    if not email:
+        return set()
+    conn = None
+    try:
+        conn = _fab_conn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT STORE FROM dbo.DIM_RLS WHERE LOWER(EMAIL_ID) = ?", [email])
+        return {_normalize_store_code(r[0]) for r in cursor.fetchall() if r[0]}
+    except Exception:
+        print("DIM_RLS lookup failed:", traceback.format_exc(), flush=True)
+        return set()
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def _check_store_access(email: str, store_code: str) -> bool:
-    """True if caller is admin, or store_code is in their assigned list.
-    False (never implicitly-allow) if the user has no store_access row at
-    all — unlike SEMANTIC-LAYER's read-side RLS convention where an empty
-    restriction means "no restriction", a brand-new store user with zero
-    rows assigned must NOT be able to submit for arbitrary stores."""
-    store_code = (store_code or '').strip().upper()
+    """True if caller is admin, or store_code is among the stores dbo.DIM_RLS
+    lists that email's EMAIL_ID against. False (never implicitly-allow) if
+    the lookup returns nothing — a user with no matching row must not be able
+    to submit for arbitrary stores."""
+    store_code = _normalize_store_code(store_code)
     if not store_code:
         return False
     if _is_admin(email):
         return True
-    allowed = {c.strip().upper() for c in _get_store_codes(email)}
-    return store_code in allowed
+    return store_code in _stores_for_email(email)
 
 
 # ── Access endpoints ───────────────────────────────────────────────────────
@@ -167,61 +186,9 @@ def check_access():
     if not email:
         return jsonify({"allowed": False}), 400
     is_admin = _is_admin(email)
-    store_codes = [] if is_admin else _get_store_codes(email)
+    store_codes = [] if is_admin else sorted(_stores_for_email(email))
     allowed = is_admin or bool(store_codes)
     return jsonify({"allowed": allowed, "is_admin": is_admin, "store_codes": store_codes})
-
-
-@app.route('/store-access', methods=['GET'])
-def list_store_access():
-    err = _require_admin()
-    if err: return err
-    with _db_lock:
-        rows = get_con().execute(
-            "SELECT email, store_codes FROM store_access ORDER BY email"
-        ).fetchall()
-    return jsonify({"access": [
-        {"email": r[0], "store_codes": json.loads(r[1]) if r[1] else []}
-        for r in rows
-    ]})
-
-
-@app.route('/store-access', methods=['POST'])
-def set_store_access():
-    err = _require_admin()
-    if err: return err
-    try:
-        body = request.get_json() or {}
-        email = body.get('email', '').strip().lower()
-        codes = [str(c).strip().upper() for c in (body.get('store_codes') or []) if str(c).strip()]
-        if not email:
-            return jsonify({"error": "email is required"}), 400
-        with _db_lock:
-            con = get_con()
-            existing = con.execute(
-                "SELECT email FROM store_access WHERE LOWER(email)=?", [email]
-            ).fetchone()
-            if existing:
-                con.execute(
-                    "UPDATE store_access SET store_codes=? WHERE LOWER(email)=?",
-                    [json.dumps(codes), email]
-                )
-            else:
-                con.execute(
-                    "INSERT INTO store_access VALUES (?,?)", [email, json.dumps(codes)]
-                )
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/store-access/<path:email>', methods=['DELETE'])
-def remove_store_access(email):
-    err = _require_admin()
-    if err: return err
-    with _db_lock:
-        get_con().execute("DELETE FROM store_access WHERE LOWER(email)=?", [email.lower()])
-    return jsonify({"status": "ok"})
 
 
 @app.route('/fixture-types', methods=['GET'])
@@ -235,7 +202,7 @@ def fixture_types():
 def submit_capture():
     email      = request.form.get('email', '').strip().lower()
     name       = request.form.get('name', '')
-    store_code = request.form.get('store_code', '').strip().upper()
+    store_code = _normalize_store_code(request.form.get('store_code', ''))
     sap_code   = request.form.get('sap_store_code', '').strip()
     brand      = request.form.get('brand', 'FLYING MACHINE').strip().upper()
     fixture    = request.form.get('fixture_type', '').strip()
@@ -322,7 +289,7 @@ def list_captures():
     if not email:
         return jsonify({"error": "email is required"}), 400
     is_admin = _is_admin(email)
-    requested_store = request.args.get('store_code', '').strip().upper()
+    requested_store = _normalize_store_code(request.args.get('store_code', ''))
     fixture = request.args.get('fixture_type', '').strip()
     from_date = request.args.get('from_date', '')
     to_date = request.args.get('to_date', '')
@@ -330,7 +297,7 @@ def list_captures():
     if is_admin:
         allowed_stores = None  # no restriction
     else:
-        allowed_stores = {c.strip().upper() for c in _get_store_codes(email)}
+        allowed_stores = _stores_for_email(email)
         if not allowed_stores:
             return jsonify({"captures": []})
         # Never trust a client-supplied store filter — intersect with what
@@ -516,7 +483,7 @@ def list_planograms():
     email = request.args.get('email', '').strip().lower()
     if not email:
         return jsonify({"error": "email is required"}), 400
-    if not (_is_admin(email) or _get_store_codes(email)):
+    if not (_is_admin(email) or _stores_for_email(email)):
         return jsonify({"error": "Not authorized"}), 403
 
     conn = None
@@ -543,7 +510,7 @@ def list_planograms():
 @app.route('/planograms/<planogram_id>/file', methods=['GET'])
 def planogram_file(planogram_id):
     email = request.args.get('email', '').strip().lower()
-    if not (_is_admin(email) or _get_store_codes(email)):
+    if not (_is_admin(email) or _stores_for_email(email)):
         return jsonify({"error": "Not authorized"}), 403
     conn = None
     try:
@@ -565,6 +532,111 @@ def planogram_file(planogram_id):
     if not os.path.exists(full_path):
         return jsonify({"error": "File missing on disk"}), 404
     return send_file(full_path, as_attachment=False)
+
+
+# ── Fixture master (area sq ft — needed for SSPD / space-vs-sales in Power BI) ──
+# HO-maintained reference data, not a point-in-time event like a capture, so it's
+# upsert-by-key (STORE_CODE, FIXTURE_LABEL) same as planograms rather than insert-only.
+
+@app.route('/fixture-master', methods=['POST'])
+def upsert_fixture_master():
+    err = _require_admin()
+    if err: return err
+    body = request.get_json() or {}
+    store_code = str(body.get('store_code', '')).strip().upper()
+    fixture_type = str(body.get('fixture_type', '')).strip()
+    fixture_label = str(body.get('fixture_label', '')).strip()
+    area_sqft = body.get('area_sqft')
+    brand = str(body.get('brand', 'FLYING MACHINE')).strip().upper()
+
+    if not store_code or fixture_type not in FIXTURE_TYPES or not fixture_label:
+        return jsonify({"error": "store_code, a valid fixture_type, and fixture_label are required"}), 400
+    try:
+        area_sqft = float(area_sqft)
+        if area_sqft <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({"error": "area_sqft must be a positive number"}), 400
+
+    conn = None
+    try:
+        conn = _fab_conn()
+        conn.autocommit = True
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM prd.DIM_UI_MONEY_MAPPING_FIXTURE_MASTER WHERE XSTORE_STORECODE=? AND FIXTURE_LABEL=?",
+            [store_code, fixture_label]
+        )
+        cursor.execute(
+            """
+            INSERT INTO prd.DIM_UI_MONEY_MAPPING_FIXTURE_MASTER
+                (XSTORE_STORECODE, BRAND, FIXTURE_TYPE, FIXTURE_LABEL, AREA_SQFT, UPDATED_BY_EMAIL, UPDATED_AT, LOAD_RUN_DATE)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [store_code, brand, fixture_type, fixture_label, area_sqft,
+             body.get('caller_email', ''), datetime.utcnow(), _load_run_date()]
+        )
+    except Exception as e:
+        print("Fixture master upsert failed:", traceback.format_exc(), flush=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route('/fixture-master', methods=['GET'])
+def list_fixture_master():
+    email = request.args.get('email', '').strip().lower()
+    if not email:
+        return jsonify({"error": "email is required"}), 400
+    is_admin = _is_admin(email)
+    requested_store = _normalize_store_code(request.args.get('store_code', ''))
+
+    if is_admin:
+        allowed_stores = None
+    else:
+        allowed_stores = _stores_for_email(email)
+        if not allowed_stores:
+            return jsonify({"fixtures": []})
+        if requested_store:
+            allowed_stores = allowed_stores & {requested_store}
+            if not allowed_stores:
+                return jsonify({"fixtures": []})
+
+    conditions, params = [], []
+    if allowed_stores is not None:
+        placeholders = ','.join('?' for _ in allowed_stores)
+        conditions.append(f"XSTORE_STORECODE IN ({placeholders})")
+        params.extend(sorted(allowed_stores))
+    elif requested_store:
+        conditions.append("XSTORE_STORECODE = ?")
+        params.append(requested_store)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    conn = None
+    try:
+        conn = _fab_conn()
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            SELECT XSTORE_STORECODE, FIXTURE_TYPE, FIXTURE_LABEL, AREA_SQFT, UPDATED_AT
+            FROM prd.DIM_UI_MONEY_MAPPING_FIXTURE_MASTER
+            {where}
+            ORDER BY XSTORE_STORECODE, FIXTURE_LABEL
+            """,
+            params
+        )
+        fixtures = [{
+            "store_code": r[0], "fixture_type": r[1], "fixture_label": r[2],
+            "area_sqft": r[3], "updated_at": str(r[4]),
+        } for r in cursor.fetchall()]
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+    return jsonify({"fixtures": fixtures})
 
 
 # ── Audit logs ──────────────────────────────────────────────────────────────
