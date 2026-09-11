@@ -38,7 +38,38 @@ function CaptureDetail({ user, capture, onClose }) {
   )
 }
 
-function PlanogramUpload({ user }) {
+function CoverageStats({ user }) {
+  const [stats, setStats] = useState(null)
+
+  useEffect(() => {
+    fetch(`${API}/captures/summary?email=${encodeURIComponent(user.email)}`)
+      .then(r => r.json())
+      .then(d => setStats(d.error ? null : d))
+      .catch(() => setStats(null))
+  }, [user.email])
+
+  if (!stats) return null
+
+  return (
+    <div className="mm-stats-row">
+      <div className="mm-stat-tile">
+        <span className="eyebrow">{stats.month}</span>
+        <div className="mm-stat-value">{stats.total_stores}</div>
+        <div className="mm-stat-label">network stores</div>
+      </div>
+      <div className="mm-stat-tile">
+        <div className="mm-stat-value">{stats.active_stores}</div>
+        <div className="mm-stat-label">stores captured this month</div>
+      </div>
+      <div className="mm-stat-tile">
+        <div className="mm-stat-value">{stats.total_captures}</div>
+        <div className="mm-stat-label">walls captured this month</div>
+      </div>
+    </div>
+  )
+}
+
+function PlanogramPanel({ user }) {
   const [fixtureTypes, setFixtureTypes] = useState([])
   const [fixtureType, setFixtureType] = useState('')
   const [storeCode, setStoreCode] = useState('')
@@ -47,10 +78,22 @@ function PlanogramUpload({ user }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
+  const [planograms, setPlanograms] = useState([])
+  const [listLoading, setListLoading] = useState(true)
 
   useEffect(() => {
     fetch(`${API}/fixture-types`).then(r => r.json()).then(d => setFixtureTypes(d.fixture_types || []))
   }, [])
+
+  const loadPlanograms = () => {
+    setListLoading(true)
+    fetch(`${API}/planograms?email=${encodeURIComponent(user.email)}`)
+      .then(r => r.json())
+      .then(d => setPlanograms(d.planograms || []))
+      .catch(() => setPlanograms([]))
+      .finally(() => setListLoading(false))
+  }
+  useEffect(loadPlanograms, [user.email])
 
   const submit = async () => {
     setSaving(true); setError(''); setSaved('')
@@ -68,6 +111,7 @@ function PlanogramUpload({ user }) {
       if (!res.ok) throw new Error(data.error || 'Upload failed')
       setSaved('Planogram uploaded.')
       setFixtureType(''); setStoreCode(''); setEffectiveDate(''); setFile(null)
+      loadPlanograms()
     } catch (e) {
       setError(e.message)
     } finally {
@@ -77,8 +121,8 @@ function PlanogramUpload({ user }) {
 
   return (
     <div className="mm-planogram-panel card">
-      <div className="eyebrow">Reference layout</div>
-      <h3>Upload planogram</h3>
+      <div className="eyebrow">Reference layout · Head Office only</div>
+      <h3>Planograms</h3>
       <div className="mm-planogram-row">
         <select value={fixtureType} onChange={e => setFixtureType(e.target.value)}>
           <option value="">Fixture…</option>
@@ -99,6 +143,32 @@ function PlanogramUpload({ user }) {
       </div>
       {error && <div className="error-bar">{error}</div>}
       {saved && <div className="saved-bar">{saved}</div>}
+
+      {!listLoading && (
+        planograms.length === 0 ? (
+          <p className="mm-cc-hint">No planograms uploaded yet.</p>
+        ) : (
+          <ul className="mm-planogram-list">
+            {planograms.map(p => (
+              <li key={p.planogram_id}>
+                <span>
+                  <strong>{p.store_code || 'All stores'}</strong> · {p.fixture_type}
+                  <span className="mm-planogram-date"> · {p.effective_date}</span>
+                </span>
+                <a
+                  className="btn-outline"
+                  href={`${API}/planograms/${p.planogram_id}/file?email=${encodeURIComponent(user.email)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <span className="msi">grid_view</span>
+                  View
+                </a>
+              </li>
+            ))}
+          </ul>
+        )
+      )}
     </div>
   )
 }
@@ -139,6 +209,8 @@ export default function ReviewPortal({ user }) {
         <div className="eyebrow">Head office · review</div>
         <h1>Captures</h1>
 
+        <CoverageStats user={user} />
+
         <div className="mm-review-filters">
           <input
             type="text"
@@ -178,7 +250,7 @@ export default function ReviewPortal({ user }) {
           ))}
         </div>
 
-        <PlanogramUpload user={user} />
+        <PlanogramPanel user={user} />
       </main>
 
       {selected && <CaptureDetail user={user} capture={selected} onClose={() => setSelected(null)} />}

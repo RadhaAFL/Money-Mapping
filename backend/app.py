@@ -387,6 +387,43 @@ def list_captures():
     return jsonify({"captures": captures})
 
 
+@app.route('/captures/summary', methods=['GET'])
+def captures_summary():
+    """Admin-only network coverage snapshot for the current calendar month:
+    total stores (from dbo.DIM_RLS, the whole network Money Mapping could
+    ever reach), how many of those actually have a capture this month, and
+    how many capture rows (walls) that adds up to."""
+    email = request.args.get('email', '').strip().lower()
+    if not _is_admin(email):
+        return jsonify({"error": "Admin access required"}), 403
+
+    conn = None
+    try:
+        conn = _fab_conn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT STORE FROM dbo.DIM_RLS")
+        total_stores = len({_normalize_store_code(r[0]) for r in cursor.fetchall() if r[0]})
+        cursor.execute("""
+            SELECT COUNT(DISTINCT XSTORE_STORECODE), COUNT(*)
+            FROM prd.DIM_UI_MONEY_MAPPING_CAPTURE
+            WHERE YEAR(CAPTURED_AT) = YEAR(GETUTCDATE()) AND MONTH(CAPTURED_AT) = MONTH(GETUTCDATE())
+        """)
+        row = cursor.fetchone()
+        active_stores, total_captures = (row[0] or 0, row[1] or 0) if row else (0, 0)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify({
+        "month": datetime.utcnow().strftime('%B %Y'),
+        "total_stores": total_stores,
+        "active_stores": active_stores,
+        "total_captures": total_captures,
+    })
+
+
 @app.route('/captures/<capture_id>/styles', methods=['GET'])
 def capture_styles(capture_id):
     email = request.args.get('email', '').strip().lower()
@@ -512,24 +549,15 @@ def upload_planogram():
 
 @app.route('/planograms', methods=['GET'])
 def list_planograms():
-    """List planograms. Admins with no store_code filter see everything
-    (ReviewPortal's browse view). A store_code filter — required for
-    non-admins, defaulted to their own store — returns that store's own
-    planograms plus store-agnostic ones (XSTORE_STORECODE IS NULL, i.e.
-    'applies to all stores for that fixture type')."""
+    """List planograms — Head Office only. The technical planogram/blueprint
+    is HO-facing reference material, unlike captures which stores both
+    submit and can see their own. An optional store_code filter returns
+    that store's own planograms plus store-agnostic ones (XSTORE_STORECODE
+    IS NULL, i.e. 'applies to all stores for that fixture type')."""
     email = request.args.get('email', '').strip().lower()
-    if not email:
-        return jsonify({"error": "email is required"}), 400
-    is_admin = _is_admin(email)
-    requested_store = _normalize_store_code(request.args.get('store_code', ''))
-
-    if is_admin:
-        store_filter = requested_store or None
-    else:
-        allowed = _stores_for_email(email)
-        if not allowed:
-            return jsonify({"error": "Not authorized"}), 403
-        store_filter = requested_store if requested_store in allowed else sorted(allowed)[0]
+    if not _is_admin(email):
+        return jsonify({"error": "Admin access required"}), 403
+    store_filter = _normalize_store_code(request.args.get('store_code', '')) or None
 
     where, params = "", []
     if store_filter:
@@ -561,8 +589,8 @@ def list_planograms():
 @app.route('/planograms/<planogram_id>/file', methods=['GET'])
 def planogram_file(planogram_id):
     email = request.args.get('email', '').strip().lower()
-    if not (_is_admin(email) or _stores_for_email(email)):
-        return jsonify({"error": "Not authorized"}), 403
+    if not _is_admin(email):
+        return jsonify({"error": "Admin access required"}), 403
     conn = None
     try:
         conn = _fab_conn()

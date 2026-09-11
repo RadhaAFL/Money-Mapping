@@ -3,7 +3,51 @@
   margin: 0 auto;
   padding: 28px 20px 60px;
 }
-.mm-review-main h1 { font-size: 26px; margin: 6px 0 20px; font-weight: 700; }
+.mm-review-main h1 { font-size: 26px; margin: 6px 0 4px; font-weight: 700; }
+
+.mm-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 16px 0 24px;
+}
+.mm-stat-tile {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+}
+.mm-stat-value {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.mm-stat-label { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+.mm-planogram-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mm-planogram-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+.mm-planogram-date { font-weight: 400; color: var(--muted); }
 
 .mm-review-filters {
   display: flex;

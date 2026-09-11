@@ -120,8 +120,8 @@
 
 .mm-submit { width: 100%; }
 
-/* Planogram / recent captures lists */
-.mm-planogram-list, .mm-recent-list {
+/* Recent captures list */
+.mm-recent-list {
   list-style: none;
   margin: 4px 0 0;
   padding: 0;
@@ -129,15 +129,6 @@
   flex-direction: column;
   gap: 8px;
 }
-.mm-planogram-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 14px;
-  font-weight: 600;
-}
-.mm-planogram-date { font-weight: 400; color: var(--muted); }
 .mm-recent-list li {
   display: flex;
   align-items: center;

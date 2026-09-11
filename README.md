@@ -159,9 +159,10 @@ Base path in production: `/moneymapping-api`
 | `GET` | `/captures?email=&store_code=&fixture_type=&from_date=&to_date=` | List, RLS-filtered server-side |
 | `GET` | `/captures/<id>/styles?email=` | Scanned style codes for one capture |
 | `GET` | `/captures/<id>/photo?email=` | Inline photo (`as_attachment=False`) |
-| `POST` | `/planograms` | Admin, multipart: `caller_email, email, fixture_type, store_code (optional), effective_date, file` |
-| `GET` | `/planograms?email=` | List |
-| `GET` | `/planograms/<id>/file?email=` | File download |
+| `GET` | `/captures/summary?email=` | Admin-only: network coverage for the current month — total stores (`dbo.DIM_RLS`), stores with a capture, total capture count |
+| `POST` | `/planograms` | Admin-only, multipart: `caller_email, email, fixture_type, store_code (optional), effective_date, file` |
+| `GET` | `/planograms?email=&store_code=` | Admin-only — the blueprint planogram is HO-facing design reference, unlike captures which stores both submit and see their own |
+| `GET` | `/planograms/<id>/file?email=` | Admin-only file download |
 | `POST` | `/fixture-master` | Admin: `{store_code, fixture_type, fixture_label, area_sqft, caller_email}` — upsert by `(store_code, fixture_label)` |
 | `GET` | `/fixture-master?email=&store_code=` | List, RLS-filtered server-side same as `/captures` |
 | `POST` | `/logs`, `GET /logs?caller_email=` | Audit log write / admin read |

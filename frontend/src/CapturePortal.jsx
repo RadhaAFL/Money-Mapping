@@ -92,49 +92,6 @@ function FixturePickerModal({ fixtureTypes, onPick, onCancel }) {
   )
 }
 
-function PlanogramViewer({ user, storeCode }) {
-  const [planograms, setPlanograms] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!storeCode) return
-    setLoading(true)
-    fetch(`${API}/planograms?email=${encodeURIComponent(user.email)}&store_code=${encodeURIComponent(storeCode)}`)
-      .then(r => r.json())
-      .then(d => setPlanograms(d.planograms || []))
-      .catch(() => setPlanograms([]))
-      .finally(() => setLoading(false))
-  }, [storeCode, user.email])
-
-  if (loading) return null
-
-  return (
-    <div className="mm-field card">
-      <span className="eyebrow">Planogram</span>
-      {planograms.length === 0 ? (
-        <p className="mm-cc-hint">No planogram uploaded for this store yet.</p>
-      ) : (
-        <ul className="mm-planogram-list">
-          {planograms.map(p => (
-            <li key={p.planogram_id}>
-              <span>{p.fixture_type} <span className="mm-planogram-date">· {p.effective_date}</span></span>
-              <a
-                className="btn-outline"
-                href={`${API}/planograms/${p.planogram_id}/file?email=${encodeURIComponent(user.email)}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <span className="msi">grid_view</span>
-                View
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
 export default function CapturePortal({ user, allowAnyStore = false, embedded = false }) {
   const [view, setView] = useState('home') // 'home' | 'capture' | 'preview'
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -292,7 +249,6 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
 
         {view === 'home' && (
           <>
-            <PlanogramViewer user={user} storeCode={storeCode} />
             <CategoryContributionPanel user={user} storeCode={storeCode} />
 
             <div className="mm-field card">
