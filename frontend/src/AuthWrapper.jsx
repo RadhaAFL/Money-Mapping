@@ -84,8 +84,12 @@ function AccessDenied({ email }) {
   )
 }
 
-function AccessConfirm({ access, storeCode, onStoreCodeChange, onEnter }) {
-  const capabilities = access.isAdmin ? HO_CAPABILITIES : STORE_CAPABILITIES
+function AccessConfirm({ access, role, onRoleChange, storeCode, onStoreCodeChange, onEnter }) {
+  const capabilities = role === 'ho' ? HO_CAPABILITIES : STORE_CAPABILITIES
+  // Non-admins only ever have the Store role — the Head Office card is
+  // informational, not clickable, since their account has no HO capability.
+  const canPickRole = access.isAdmin
+
   return (
     <HeroSplit>
       <div className="mm-auth-card mm-access-confirm">
@@ -93,14 +97,20 @@ function AccessConfirm({ access, storeCode, onStoreCodeChange, onEnter }) {
         <h1>Choose your access</h1>
 
         <div className="mm-role-cards">
-          <div className={`mm-role-card ${!access.isAdmin ? 'active' : 'disabled'}`}>
+          <div
+            className={`mm-role-card ${role === 'store' ? 'active' : (canPickRole ? 'pickable' : 'disabled')}`}
+            onClick={canPickRole ? () => onRoleChange('store') : undefined}
+          >
             <span className="msi">add_a_photo</span>
             <div>
               <div className="mm-role-card-title">Store</div>
               <div className="mm-role-card-sub">Store · Mobile</div>
             </div>
           </div>
-          <div className={`mm-role-card ${access.isAdmin ? 'active' : 'disabled'}`}>
+          <div
+            className={`mm-role-card ${role === 'ho' ? 'active' : (canPickRole ? 'pickable' : 'disabled')}`}
+            onClick={canPickRole ? () => onRoleChange('ho') : undefined}
+          >
             <span className="msi">apartment</span>
             <div>
               <div className="mm-role-card-title">Head Office</div>
@@ -121,7 +131,7 @@ function AccessConfirm({ access, storeCode, onStoreCodeChange, onEnter }) {
           </ul>
         </div>
 
-        {!access.isAdmin && (
+        {role === 'store' && !access.isAdmin && (
           <div className="mm-store-panel">
             <div className="eyebrow">Your store</div>
             {access.storeCodes.length > 1 ? (
@@ -136,10 +146,15 @@ function AccessConfirm({ access, storeCode, onStoreCodeChange, onEnter }) {
             )}
           </div>
         )}
+        {role === 'store' && access.isAdmin && (
+          <p className="mm-auth-hint" style={{ marginTop: -8, marginBottom: 16 }}>
+            You'll pick which store to capture for on the next screen.
+          </p>
+        )}
 
         <button className="btn-primary mm-auth-btn" onClick={onEnter}>
           <span className="msi">login</span>
-          Enter as {access.isAdmin ? 'Head Office' : 'Store'}
+          Enter as {role === 'ho' ? 'Head Office' : 'Store'}
         </button>
       </div>
     </HeroSplit>
@@ -152,6 +167,7 @@ export default function AuthWrapper() {
   const [signing, setSigning] = useState(false)
   const [access, setAccess] = useState(undefined) // undefined = loading
   const [entered, setEntered] = useState(false)
+  const [role, setRole] = useState('store') // which card is selected on the access-confirm screen
   const [storeCode, setStoreCode] = useState('')
   const [view, setView] = useState('review') // admin toggle: 'review' | 'fixtures'
 
@@ -173,6 +189,7 @@ export default function AuthWrapper() {
         }
         setAccess(data.allowed ? user : null)
         setStoreCode((data.store_codes || [])[0] || '')
+        setRole(data.is_admin ? 'ho' : 'store')
         logEvent(user, 'login', { allowed: data.allowed, is_admin: data.is_admin })
       })
       .catch(() => setAccess(null))
@@ -197,6 +214,8 @@ export default function AuthWrapper() {
     return (
       <AccessConfirm
         access={access}
+        role={role}
+        onRoleChange={setRole}
         storeCode={storeCode}
         onStoreCodeChange={setStoreCode}
         onEnter={() => setEntered(true)}
@@ -204,8 +223,15 @@ export default function AuthWrapper() {
     )
   }
 
-  if (!access.isAdmin) {
-    return <CapturePortal user={{ ...access, storeCodes: [storeCode, ...access.storeCodes.filter(c => c !== storeCode)] }} />
+  if (role === 'store') {
+    return (
+      <CapturePortal
+        user={access.isAdmin
+          ? access
+          : { ...access, storeCodes: [storeCode, ...access.storeCodes.filter(c => c !== storeCode)] }}
+        allowAnyStore={access.isAdmin}
+      />
+    )
   }
 
   return (

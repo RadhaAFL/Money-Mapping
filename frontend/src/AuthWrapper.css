@@ -168,6 +168,8 @@
 }
 .mm-role-card.active .msi { color: var(--primary); }
 .mm-role-card.disabled { opacity: 0.4; }
+.mm-role-card.pickable { cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
+.mm-role-card.pickable:hover { border-color: var(--outline); background: var(--surface); }
 
 .mm-capability-panel {
   border: 1px solid var(--line);
