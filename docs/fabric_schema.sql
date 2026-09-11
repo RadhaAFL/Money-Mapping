@@ -56,3 +56,16 @@ CREATE TABLE prd.DIM_UI_MONEY_MAPPING_FIXTURE_MASTER (
     UPDATED_AT         DATETIME2(6) NOT NULL,
     LOAD_RUN_DATE      VARCHAR(20)  NOT NULL
 );
+
+-- Store-entered (not HO-entered) sales mix by category — the store's own
+-- read of which categories drive their business. Full replace per
+-- (XSTORE_STORECODE, BRAND) on every save, same idiom as Planogram.
+CREATE TABLE prd.DIM_UI_MONEY_MAPPING_CATEGORY_CONTRIBUTION (
+    XSTORE_STORECODE   VARCHAR(50)  NOT NULL,
+    BRAND              VARCHAR(50)  NOT NULL,
+    CATEGORY           VARCHAR(50)  NOT NULL,   -- Jeans/Shirts/Crew/Collared Tee/Non-denim & Shorts/Sweatshirts/Jackets/Others
+    CONTRIBUTION_PCT   FLOAT        NOT NULL,
+    UPDATED_BY_EMAIL   VARCHAR(200) NOT NULL,
+    UPDATED_AT         DATETIME2(6) NOT NULL,
+    LOAD_RUN_DATE      VARCHAR(20)  NOT NULL
+);

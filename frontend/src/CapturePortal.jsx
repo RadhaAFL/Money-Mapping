@@ -2,11 +2,23 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserMultiFormatReader } from '@zxing/browser'
 import { msalInstance } from './authConfig'
 import { logEvent } from './logger'
+import CategoryContributionPanel from './CategoryContributionPanel'
 import './CapturePortal.css'
 
 const API = '/moneymapping-api'
 const MAX_DIM = 1600
 const JPEG_QUALITY = 0.8
+
+const FIXTURE_META = {
+  'Facade':              { icon: 'storefront',        desc: 'Store front / entrance' },
+  'Wall':                { icon: 'grid_view',         desc: 'Main wall display' },
+  'Hang Rail':            { icon: 'checkroom',         desc: 'Hanging rail' },
+  'Table':                { icon: 'table_restaurant',  desc: 'Folded table display' },
+  'Denim Wall':           { icon: 'dry_cleaning',      desc: 'Denim-focused wall' },
+  'Laundered Black':      { icon: 'dark_mode',         desc: 'Laundered black wall' },
+  'Mannequin / Window':    { icon: 'accessibility_new', desc: 'Mannequin or window display' },
+}
+const SIGNATURE_WALLS = ['Denim Wall', 'Laundered Black', 'Mannequin / Window']
 
 // Resize a captured photo client-side before upload so a phone's raw
 // camera output (often 4-8 MB) doesn't fully consume the 20 MiB request cap
@@ -36,7 +48,96 @@ function resizeImage(file) {
   })
 }
 
+function FixturePickerModal({ fixtureTypes, onPick, onCancel }) {
+  const main = fixtureTypes.filter(t => !SIGNATURE_WALLS.includes(t))
+  const signature = fixtureTypes.filter(t => SIGNATURE_WALLS.includes(t))
+  const primary = main[0]
+  const rest = main.slice(1)
+
+  const Card = ({ type, big }) => {
+    const meta = FIXTURE_META[type] || { icon: 'category', desc: '' }
+    return (
+      <button key={type} className={big ? 'mm-fixture-card mm-fixture-card-big' : 'mm-fixture-card'} onClick={() => onPick(type)}>
+        <span className="mm-fixture-card-icon"><span className="msi">{meta.icon}</span></span>
+        <div>
+          <div className="mm-fixture-card-title">{type}</div>
+          {big && meta.desc && <div className="mm-fixture-card-desc">{meta.desc}</div>}
+        </div>
+      </button>
+    )
+  }
+
+  return (
+    <div className="mm-modal-backdrop" onClick={onCancel}>
+      <div className="mm-modal-sheet" onClick={e => e.stopPropagation()}>
+        <div className="mm-modal-handle" />
+        <div className="eyebrow mm-modal-eyebrow">What did you capture?</div>
+        {primary && <Card type={primary} big />}
+        {rest.length > 0 && (
+          <div className="mm-fixture-grid">
+            {rest.map(t => <Card key={t} type={t} />)}
+          </div>
+        )}
+        {signature.length > 0 && (
+          <>
+            <div className="eyebrow mm-modal-eyebrow">Signature walls</div>
+            <div className="mm-fixture-grid">
+              {signature.map(t => <Card key={t} type={t} />)}
+            </div>
+          </>
+        )}
+        <button className="btn-outline mm-modal-cancel" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+function PlanogramViewer({ user, storeCode }) {
+  const [planograms, setPlanograms] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!storeCode) return
+    setLoading(true)
+    fetch(`${API}/planograms?email=${encodeURIComponent(user.email)}&store_code=${encodeURIComponent(storeCode)}`)
+      .then(r => r.json())
+      .then(d => setPlanograms(d.planograms || []))
+      .catch(() => setPlanograms([]))
+      .finally(() => setLoading(false))
+  }, [storeCode, user.email])
+
+  if (loading) return null
+
+  return (
+    <div className="mm-field card">
+      <span className="eyebrow">Planogram</span>
+      {planograms.length === 0 ? (
+        <p className="mm-cc-hint">No planogram uploaded for this store yet.</p>
+      ) : (
+        <ul className="mm-planogram-list">
+          {planograms.map(p => (
+            <li key={p.planogram_id}>
+              <span>{p.fixture_type} <span className="mm-planogram-date">· {p.effective_date}</span></span>
+              <a
+                className="btn-outline"
+                href={`${API}/planograms/${p.planogram_id}/file?email=${encodeURIComponent(user.email)}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span className="msi">grid_view</span>
+                View
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export default function CapturePortal({ user, allowAnyStore = false, embedded = false }) {
+  const [view, setView] = useState('home') // 'home' | 'capture' | 'preview'
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [fixtureTypes, setFixtureTypes] = useState([])
   const [allStores, setAllStores] = useState([])
   const [storeCode, setStoreCode] = useState(user.storeCodes[0] || '')
@@ -49,6 +150,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
+  const [recentCaptures, setRecentCaptures] = useState([])
 
   const videoRef = useRef(null)
   const controlsRef = useRef(null)
@@ -67,6 +169,15 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
       .then(d => setAllStores(d.stores || []))
       .catch(() => setAllStores([]))
   }, [allowAnyStore, user.email])
+
+  const loadRecentCaptures = () => {
+    if (!storeCode) return
+    fetch(`${API}/captures?email=${encodeURIComponent(user.email)}&store_code=${encodeURIComponent(storeCode)}`)
+      .then(r => r.json())
+      .then(d => setRecentCaptures((d.captures || []).slice(0, 6)))
+      .catch(() => setRecentCaptures([]))
+  }
+  useEffect(loadRecentCaptures, [storeCode, user.email])
 
   useEffect(() => {
     if (!scannerActive) return
@@ -101,7 +212,14 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
     setManualStyle('')
   }
 
-  const canSubmit = storeCode && fixtureType && photoBlob && !saving
+  const resetCaptureState = () => {
+    setFixtureType('')
+    setPhotoBlob(null)
+    setPhotoPreviewUrl('')
+    setScannedStyles([])
+    setScannerActive(false)
+    setError('')
+  }
 
   const submit = async () => {
     setSaving(true); setError(''); setSaved('')
@@ -120,12 +238,9 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
 
       setSaved(`Captured — ${data.styles_saved} style${data.styles_saved === 1 ? '' : 's'} logged.`)
       logEvent(user, 'capture_submit', { store_code: storeCode, fixture_type: fixtureType, styles: data.styles_saved })
-
-      setFixtureType('')
-      setPhotoBlob(null)
-      setPhotoPreviewUrl('')
-      setScannedStyles([])
-      setScannerActive(false)
+      resetCaptureState()
+      setView('home')
+      loadRecentCaptures()
     } catch (e) {
       setError(e.message)
     } finally {
@@ -134,6 +249,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
   }
 
   const storeOptions = useMemo(() => user.storeCodes, [user.storeCodes])
+  const canReview = fixtureType && photoBlob
 
   return (
     <div className="mm-capture-page">
@@ -165,7 +281,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
               {allStores.map(code => <option key={code} value={code} />)}
             </datalist>
           </label>
-        ) : storeOptions.length > 1 && (
+        ) : storeOptions.length > 1 && view === 'home' && (
           <label className="mm-field card">
             <span className="eyebrow">Store</span>
             <select value={storeCode} onChange={e => setStoreCode(e.target.value)}>
@@ -174,82 +290,162 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
           </label>
         )}
 
-        <label className="mm-field card">
-          <span className="eyebrow">Fixture</span>
-          <select value={fixtureType} onChange={e => setFixtureType(e.target.value)}>
-            <option value="">Select a fixture…</option>
-            {fixtureTypes.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </label>
+        {view === 'home' && (
+          <>
+            <PlanogramViewer user={user} storeCode={storeCode} />
+            <CategoryContributionPanel user={user} storeCode={storeCode} />
 
-        <label className="mm-field card">
-          <span className="eyebrow">Photo</span>
-          {photoPreviewUrl
-            ? <img className="mm-photo-preview" src={photoPreviewUrl} alt="Fixture capture preview" />
-            : (
-              <div className="mm-photo-placeholder">
-                <span className="msi">add_a_photo</span>
-                No photo yet
-              </div>
-            )}
-          <input type="file" accept="image/*" capture="environment" onChange={onPhotoChange} />
-        </label>
+            <div className="mm-field card">
+              <span className="eyebrow">Recent captures</span>
+              {recentCaptures.length === 0 ? (
+                <p className="mm-cc-hint">No captures logged for this store yet.</p>
+              ) : (
+                <ul className="mm-recent-list">
+                  {recentCaptures.map(c => (
+                    <li key={c.capture_id}>
+                      <span className="msi">{(FIXTURE_META[c.fixture_type] || {}).icon || 'category'}</span>
+                      <span>{c.fixture_type}</span>
+                      <span className="mm-recent-date">{c.captured_at.slice(0, 10)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
-        <div className="mm-field card">
-          <span className="eyebrow">Styles on this fixture</span>
-          {!scannerActive
-            ? (
-              <button className="btn-outline" onClick={() => setScannerActive(true)}>
-                <span className="msi">qr_code_scanner</span>
-                Start barcode scan
-              </button>
-            )
-            : (
-              <div className="mm-scanner">
-                <video ref={videoRef} className="mm-scanner-video" />
-                <button className="btn-outline" onClick={() => setScannerActive(false)}>
-                  <span className="msi">stop_circle</span>
-                  Stop scanning
+            <button
+              className="btn-primary mm-submit"
+              onClick={() => setPickerOpen(true)}
+              disabled={!storeCode}
+            >
+              <span className="msi">add_a_photo</span>
+              Add capture
+            </button>
+          </>
+        )}
+
+        {view === 'capture' && (
+          <>
+            <div className="mm-capture-breadcrumb">
+              <span className="msi">{(FIXTURE_META[fixtureType] || {}).icon || 'category'}</span>
+              <span>{fixtureType}</span>
+              <button className="mm-link-btn" onClick={() => setPickerOpen(true)}>Change</button>
+            </div>
+
+            <label className="mm-field card">
+              <span className="eyebrow">Photo</span>
+              {photoPreviewUrl
+                ? <img className="mm-photo-preview" src={photoPreviewUrl} alt="Fixture capture preview" />
+                : (
+                  <div className="mm-photo-placeholder">
+                    <span className="msi">add_a_photo</span>
+                    No photo yet
+                  </div>
+                )}
+              <input type="file" accept="image/*" capture="environment" onChange={onPhotoChange} />
+            </label>
+
+            <div className="mm-field card">
+              <span className="eyebrow">Styles on this fixture</span>
+              {!scannerActive
+                ? (
+                  <button className="btn-outline" onClick={() => setScannerActive(true)}>
+                    <span className="msi">qr_code_scanner</span>
+                    Start barcode scan
+                  </button>
+                )
+                : (
+                  <div className="mm-scanner">
+                    <video ref={videoRef} className="mm-scanner-video" />
+                    <button className="btn-outline" onClick={() => setScannerActive(false)}>
+                      <span className="msi">stop_circle</span>
+                      Stop scanning
+                    </button>
+                  </div>
+                )}
+
+              <div className="mm-manual-add">
+                <input
+                  type="text"
+                  placeholder="Or type a style code"
+                  value={manualStyle}
+                  onChange={e => setManualStyle(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addManualStyle()}
+                />
+                <button className="btn-outline" onClick={addManualStyle}>
+                  <span className="msi">add</span>
+                  Add
                 </button>
               </div>
-            )}
 
-          <div className="mm-manual-add">
-            <input
-              type="text"
-              placeholder="Or type a style code"
-              value={manualStyle}
-              onChange={e => setManualStyle(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addManualStyle()}
-            />
-            <button className="btn-outline" onClick={addManualStyle}>
-              <span className="msi">add</span>
-              Add
-            </button>
-          </div>
+              {scannedStyles.length > 0 && (
+                <ul className="mm-style-list">
+                  {scannedStyles.map(style => (
+                    <li key={style}>
+                      <span>{style}</span>
+                      <button onClick={() => removeStyle(style)} aria-label={`Remove ${style}`}>
+                        <span className="msi">close</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
-          {scannedStyles.length > 0 && (
-            <ul className="mm-style-list">
-              {scannedStyles.map(style => (
-                <li key={style}>
-                  <span>{style}</span>
-                  <button onClick={() => removeStyle(style)} aria-label={`Remove ${style}`}>
-                    <span className="msi">close</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+            {error && <div className="error-bar">{error}</div>}
 
-        {error && <div className="error-bar">{error}</div>}
-        {saved && <div className="saved-bar">{saved}</div>}
+            <div className="mm-step-actions">
+              <button className="btn-outline" onClick={() => { resetCaptureState(); setView('home') }}>Cancel</button>
+              <button className="btn-primary" onClick={() => setView('preview')} disabled={!canReview}>
+                <span className="msi">visibility</span>
+                Review
+              </button>
+            </div>
+          </>
+        )}
 
-        <button className="btn-primary mm-submit" onClick={submit} disabled={!canSubmit}>
-          <span className="msi">cloud_upload</span>
-          {saving ? 'Saving…' : 'Submit capture'}
-        </button>
+        {view === 'preview' && (
+          <>
+            <div className="mm-field card">
+              <span className="eyebrow">Preview</span>
+              <img className="mm-photo-preview" src={photoPreviewUrl} alt="Capture preview" />
+              <div className="mm-preview-row">
+                <span className="msi">{(FIXTURE_META[fixtureType] || {}).icon || 'category'}</span>
+                <strong>{fixtureType}</strong>
+                <span className="mm-preview-store">{storeCode}</span>
+              </div>
+              {scannedStyles.length > 0 ? (
+                <ul className="mm-style-list">
+                  {scannedStyles.map(style => <li key={style}><span>{style}</span></li>)}
+                </ul>
+              ) : (
+                <p className="mm-cc-hint">No styles scanned — you can still submit, or go back and add some.</p>
+              )}
+            </div>
+
+            {error && <div className="error-bar">{error}</div>}
+            {saved && <div className="saved-bar">{saved}</div>}
+
+            <div className="mm-step-actions">
+              <button className="btn-outline" onClick={() => setView('capture')}>
+                <span className="msi">edit</span>
+                Edit
+              </button>
+              <button className="btn-primary" onClick={submit} disabled={saving}>
+                <span className="msi">check_circle</span>
+                {saving ? 'Submitting…' : 'Confirm & submit'}
+              </button>
+            </div>
+          </>
+        )}
       </main>
+
+      {pickerOpen && (
+        <FixturePickerModal
+          fixtureTypes={fixtureTypes}
+          onPick={t => { setFixtureType(t); setPickerOpen(false); setView('capture') }}
+          onCancel={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   )
 }

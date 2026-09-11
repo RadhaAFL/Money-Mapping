@@ -75,6 +75,11 @@ FIXTURE_TYPES = [
     "Denim Wall", "Laundered Black", "Mannequin / Window",
 ]
 
+CATEGORIES = [
+    "Jeans", "Shirts", "Crew", "Collared Tee",
+    "Non-denim & Shorts", "Sweatshirts", "Jackets", "Others",
+]
+
 BOOTSTRAP_ADMIN = "radhakishan.thakur@arvindfashions.com"
 
 
@@ -194,6 +199,11 @@ def check_access():
 @app.route('/fixture-types', methods=['GET'])
 def fixture_types():
     return jsonify({"fixture_types": FIXTURE_TYPES})
+
+
+@app.route('/categories', methods=['GET'])
+def categories():
+    return jsonify({"categories": CATEGORIES})
 
 
 @app.route('/stores', methods=['GET'])
@@ -502,21 +512,40 @@ def upload_planogram():
 
 @app.route('/planograms', methods=['GET'])
 def list_planograms():
+    """List planograms. Admins with no store_code filter see everything
+    (ReviewPortal's browse view). A store_code filter — required for
+    non-admins, defaulted to their own store — returns that store's own
+    planograms plus store-agnostic ones (XSTORE_STORECODE IS NULL, i.e.
+    'applies to all stores for that fixture type')."""
     email = request.args.get('email', '').strip().lower()
     if not email:
         return jsonify({"error": "email is required"}), 400
-    if not (_is_admin(email) or _stores_for_email(email)):
-        return jsonify({"error": "Not authorized"}), 403
+    is_admin = _is_admin(email)
+    requested_store = _normalize_store_code(request.args.get('store_code', ''))
+
+    if is_admin:
+        store_filter = requested_store or None
+    else:
+        allowed = _stores_for_email(email)
+        if not allowed:
+            return jsonify({"error": "Not authorized"}), 403
+        store_filter = requested_store if requested_store in allowed else sorted(allowed)[0]
+
+    where, params = "", []
+    if store_filter:
+        where = "WHERE XSTORE_STORECODE = ? OR XSTORE_STORECODE IS NULL"
+        params = [store_filter]
 
     conn = None
     try:
         conn = _fab_conn()
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT PLANOGRAM_ID, BRAND, FIXTURE_TYPE, XSTORE_STORECODE, EFFECTIVE_DATE, UPLOADED_AT
             FROM prd.DIM_UI_MONEY_MAPPING_PLANOGRAM
+            {where}
             ORDER BY UPLOADED_AT DESC
-        """)
+        """, params)
         planograms = [{
             "planogram_id": r[0], "brand": r[1], "fixture_type": r[2],
             "store_code": r[3], "effective_date": str(r[4]), "uploaded_at": str(r[5]),
@@ -659,6 +688,90 @@ def list_fixture_master():
         if conn is not None:
             conn.close()
     return jsonify({"fixtures": fixtures})
+
+
+# ── Category contribution (store self-reported sales mix) ─────────────────
+# Unlike fixture area (HO-set), this is entered by the store itself — their
+# own read of which categories drive their business — so it's gated by
+# _check_store_access, not _require_admin. Full replace per (store, brand)
+# each save, same as planogram/KPI-input: the whole mix is one unit, not
+# something to patch category-by-category.
+
+@app.route('/category-contribution', methods=['POST'])
+def upsert_category_contribution():
+    body = request.get_json() or {}
+    email = body.get('email', '').strip().lower()
+    store_code = _normalize_store_code(body.get('store_code', ''))
+    brand = str(body.get('brand', 'FLYING MACHINE')).strip().upper()
+    entries = body.get('entries') or []
+
+    if not _check_store_access(email, store_code):
+        return jsonify({"error": "You do not have access to submit data for this store"}), 403
+    if not entries:
+        return jsonify({"error": "entries are required"}), 400
+
+    rows = []
+    for e in entries:
+        category = str(e.get('category', '')).strip()
+        if category not in CATEGORIES:
+            return jsonify({"error": f"Unknown category: {category}"}), 400
+        try:
+            pct = float(e.get('pct'))
+        except (TypeError, ValueError):
+            return jsonify({"error": f"Invalid percentage for {category}"}), 400
+        rows.append((category, pct))
+
+    conn = None
+    try:
+        conn = _fab_conn()
+        conn.autocommit = True
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM prd.DIM_UI_MONEY_MAPPING_CATEGORY_CONTRIBUTION WHERE XSTORE_STORECODE=? AND BRAND=?",
+            [store_code, brand]
+        )
+        load_run_date = _load_run_date()
+        cursor.executemany(
+            """
+            INSERT INTO prd.DIM_UI_MONEY_MAPPING_CATEGORY_CONTRIBUTION
+                (XSTORE_STORECODE, BRAND, CATEGORY, CONTRIBUTION_PCT, UPDATED_BY_EMAIL, UPDATED_AT, LOAD_RUN_DATE)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [[store_code, brand, cat, pct, email, datetime.utcnow(), load_run_date] for cat, pct in rows]
+        )
+    except Exception as e:
+        print("Category contribution upsert failed:", traceback.format_exc(), flush=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+    return jsonify({"status": "ok", "saved": len(rows)})
+
+
+@app.route('/category-contribution', methods=['GET'])
+def get_category_contribution():
+    email = request.args.get('email', '').strip().lower()
+    store_code = _normalize_store_code(request.args.get('store_code', ''))
+    if not store_code:
+        return jsonify({"error": "store_code is required"}), 400
+    if not (_is_admin(email) or _check_store_access(email, store_code)):
+        return jsonify({"error": "Not authorized"}), 403
+
+    conn = None
+    try:
+        conn = _fab_conn()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT CATEGORY, CONTRIBUTION_PCT, UPDATED_AT FROM prd.DIM_UI_MONEY_MAPPING_CATEGORY_CONTRIBUTION WHERE XSTORE_STORECODE=?",
+            [store_code]
+        )
+        entries = [{"category": r[0], "pct": r[1], "updated_at": str(r[2])} for r in cursor.fetchall()]
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+    return jsonify({"entries": entries})
 
 
 # ── Audit logs ──────────────────────────────────────────────────────────────
