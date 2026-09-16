@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserMultiFormatReader } from '@zxing/browser'
+import * as XLSX from 'xlsx'
 import { msalInstance } from './authConfig'
 import { logEvent } from './logger'
 import CategoryContributionPanel from './CategoryContributionPanel'
@@ -169,6 +170,28 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
     setManualStyle('')
   }
 
+  const onExcelChange = async e => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const buf = await file.arrayBuffer()
+      const workbook = XLSX.read(buf, { type: 'array' })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 })
+      const codes = rows.flat().map(v => String(v ?? '').trim()).filter(Boolean)
+      if (codes.length === 0) throw new Error('No style codes found in that file.')
+      setScannedStyles(prev => {
+        const merged = [...prev]
+        for (const code of codes) if (!merged.includes(code)) merged.push(code)
+        return merged
+      })
+      setError('')
+    } catch {
+      setError('Could not read style codes from that file.')
+    }
+  }
+
   const resetCaptureState = () => {
     setFixtureType('')
     setPhotoBlob(null)
@@ -332,6 +355,12 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
                   Add
                 </button>
               </div>
+
+              <label className="btn-outline mm-excel-upload">
+                <span className="msi">upload_file</span>
+                Upload Excel of style codes
+                <input type="file" accept=".xlsx,.xls,.csv" onChange={onExcelChange} hidden />
+              </label>
 
               {scannedStyles.length > 0 && (
                 <ul className="mm-style-list">

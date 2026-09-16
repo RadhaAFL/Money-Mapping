@@ -11,6 +11,7 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import duckdb
+import io
 import json
 import os
 import pyodbc
@@ -26,12 +27,11 @@ CORS(app)
 app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20 MiB — one resized capture photo
 
 # ── Local data paths ───────────────────────────────────────────────────────
-DATA_ROOT             = os.path.join(os.path.dirname(__file__), '..', 'data')
-DB_PATH               = os.path.join(DATA_ROOT, 'app.duckdb')
-CAPTURE_UPLOAD_DIR    = os.path.join(DATA_ROOT, 'uploads', 'money_mapping')
-PLANOGRAM_UPLOAD_DIR  = os.path.join(DATA_ROOT, 'uploads', 'planograms')
-os.makedirs(CAPTURE_UPLOAD_DIR, exist_ok=True)
-os.makedirs(PLANOGRAM_UPLOAD_DIR, exist_ok=True)
+# Capture photos and planogram files live on the org's SFTP server
+# (sftp_storage.py), not on this disk — only DuckDB's own small admin/audit
+# tables are local.
+DATA_ROOT = os.path.join(os.path.dirname(__file__), '..', 'data')
+DB_PATH   = os.path.join(DATA_ROOT, 'app.duckdb')
 
 # Single persistent DuckDB connection + lock — same convention as
 # SEMANTIC-LAYER's get_con()/_db_lock (DuckDB files are single-writer).
@@ -48,6 +48,8 @@ def get_con() -> "duckdb.DuckDBPyConnection":
 
 # ── Fabric Warehouse (SQL Server / ODBC) ──────────────────────────────────
 load_dotenv(Path(__file__).resolve().parent.parent / '.env')
+
+import sftp_storage as storage  # noqa: E402 — reads SFTP_* env vars at import, must follow load_dotenv()
 
 _FAB_HOST = os.environ.get('FABRIC_DB_HOST', '')
 _FAB_PORT = int(os.environ.get('FABRIC_DB_PORT', 1433))
@@ -257,14 +259,14 @@ def submit_capture():
     styles = [str(s).strip() for s in styles if str(s).strip()][:500]  # de-noise + cap
 
     capture_id = uuid.uuid4().hex
-    store_dir = os.path.join(CAPTURE_UPLOAD_DIR, secure_filename(store_code))
-    os.makedirs(store_dir, exist_ok=True)
-    photo_rel_path = os.path.join('money_mapping', secure_filename(store_code), f"{capture_id}.jpg")
-    photo_abs_path = os.path.join(DATA_ROOT, 'uploads', photo_rel_path)
-    photo.save(photo_abs_path)
+    photo_rel_path = '/'.join(['money_mapping', secure_filename(store_code), f"{capture_id}.jpg"])
+    photo_bytes = photo.read()
 
     conn = None
+    uploaded = False
     try:
+        storage.upload(photo_bytes, photo_rel_path)
+        uploaded = True
         conn = _fab_conn()
         conn.autocommit = True
         cursor = conn.cursor()
@@ -278,7 +280,7 @@ def submit_capture():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [capture_id, store_code, sap_code or None, brand, fixture,
-             photo_rel_path.replace('\\', '/'), len(styles), 'SUBMITTED', datetime.utcnow(),
+             photo_rel_path, len(styles), 'SUBMITTED', datetime.utcnow(),
              email, name, load_run_date]
         )
         if styles:
@@ -299,8 +301,11 @@ def submit_capture():
         verified = int(cursor.fetchone()[0])
     except Exception as e:
         # Don't leave an orphaned photo behind if the Fabric write failed.
-        if os.path.exists(photo_abs_path):
-            os.remove(photo_abs_path)
+        if uploaded:
+            try:
+                storage.delete(photo_rel_path)
+            except Exception:
+                pass
         print("Capture insert failed:", traceback.format_exc(), flush=True)
         return jsonify({"error": str(e)}), 500
     finally:
@@ -478,10 +483,13 @@ def capture_photo(capture_id):
     if not (_is_admin(email) or email == (submitted_by or '').lower() or _check_store_access(email, store_code)):
         return jsonify({"error": "Not authorized"}), 403
 
-    full_path = os.path.join(DATA_ROOT, 'uploads', photo_path)
-    if not os.path.exists(full_path):
-        return jsonify({"error": "Photo file missing on disk"}), 404
-    return send_file(full_path, mimetype='image/jpeg', as_attachment=False)
+    try:
+        photo_bytes = storage.download(photo_path)
+    except FileNotFoundError:
+        return jsonify({"error": "Photo file missing on storage"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return send_file(io.BytesIO(photo_bytes), mimetype='image/jpeg', as_attachment=False)
 
 
 # ── Planograms ──────────────────────────────────────────────────────────────
@@ -506,12 +514,14 @@ def upload_planogram():
 
     planogram_id = uuid.uuid4().hex
     ext = os.path.splitext(secure_filename(file.filename or ''))[1] or '.pdf'
-    file_rel_path = os.path.join('planograms', f"{planogram_id}{ext}")
-    file_abs_path = os.path.join(DATA_ROOT, 'uploads', file_rel_path)
-    file.save(file_abs_path)
+    file_rel_path = '/'.join(['planograms', f"{planogram_id}{ext}"])
+    file_bytes = file.read()
 
     conn = None
+    uploaded = False
     try:
+        storage.upload(file_bytes, file_rel_path)
+        uploaded = True
         conn = _fab_conn()
         conn.autocommit = True
         cursor = conn.cursor()
@@ -532,12 +542,15 @@ def upload_planogram():
                  EFFECTIVE_DATE, UPLOADED_BY_EMAIL, UPLOADED_AT, LOAD_RUN_DATE)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            [planogram_id, brand, fixture, store_code, file_rel_path.replace('\\', '/'),
+            [planogram_id, brand, fixture, store_code, file_rel_path,
              effective_date, email, datetime.utcnow(), _load_run_date()]
         )
     except Exception as e:
-        if os.path.exists(file_abs_path):
-            os.remove(file_abs_path)
+        if uploaded:
+            try:
+                storage.delete(file_rel_path)
+            except Exception:
+                pass
         print("Planogram insert failed:", traceback.format_exc(), flush=True)
         return jsonify({"error": str(e)}), 500
     finally:
@@ -607,10 +620,13 @@ def planogram_file(planogram_id):
             conn.close()
     if not row:
         return jsonify({"error": "Planogram not found"}), 404
-    full_path = os.path.join(DATA_ROOT, 'uploads', row[0])
-    if not os.path.exists(full_path):
-        return jsonify({"error": "File missing on disk"}), 404
-    return send_file(full_path, as_attachment=False)
+    try:
+        file_bytes = storage.download(row[0])
+    except FileNotFoundError:
+        return jsonify({"error": "File missing on storage"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return send_file(io.BytesIO(file_bytes), as_attachment=False, download_name=os.path.basename(row[0]))
 
 
 # ── Fixture master (area sq ft — needed for SSPD / space-vs-sales in Power BI) ──

@@ -87,6 +87,12 @@
 }
 .mm-manual-add input { flex: 1; }
 
+.mm-excel-upload {
+  width: fit-content;
+  margin-top: 8px;
+  cursor: pointer;
+}
+
 .mm-style-list {
   list-style: none;
   margin: 4px 0 0;

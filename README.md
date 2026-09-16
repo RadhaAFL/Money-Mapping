@@ -11,7 +11,8 @@ Standalone React + Flask app — same auth (Azure AD) and data source
 (Microsoft Fabric) as the "Arvind Analytics" app
 (`C:\Users\7517978\Work\SEMANTIC-LAYER`), but purpose-built rather than
 generic: it only ever does this one thing, so it skips that app's
-multi-portal/wizard machinery.
+multi-portal/wizard machinery. Capture photos and planogram files are
+stored on the org's own in-house SFTP server, not on the app VM's disk.
 
 ## Manual pre-reqs (not done by this codebase)
 
@@ -29,11 +30,11 @@ Three things need action outside this repo before the app is fully live:
 ## Architecture
 
 ```text
-Microsoft Fabric Warehouse
-        |
-        | ODBC Driver 18 / pyodbc
-        v
-Flask API — backend/app.py
+Microsoft Fabric Warehouse          In-house SFTP server
+        |                            (sftp.arvindbrands.com)
+        | ODBC Driver 18 / pyodbc            |
+        v                                    | paramiko (SFTP)
+Flask API — backend/app.py  ───────────────────┘
         |
         | admins, audit_logs
         v
@@ -61,12 +62,20 @@ planogram is "current state per fixture") directly against Fabric, the same
 pattern SEMANTIC-LAYER's KPI-input portal already proves works at this
 scale.
 
+Capture photos and planogram files themselves live on the org's in-house
+SFTP server (`backend/sftp_storage.py`), not on this VM's disk — Fabric's
+`PHOTO_PATH`/`FILE_PATH` columns hold a path relative to `SFTP_ROOT`
+(default `money_mapping_uploads`), and the backend uploads/downloads those
+files over SFTP on every request (no local caching yet — see that file's
+docstring for the one-connection-per-call rationale).
+
 ## Project structure
 
 ```text
 Money_Mapping/
   backend/
     app.py               # Flask API — access control, captures, planograms
+    sftp_storage.py       # capture-photo / planogram file storage over SFTP
     requirements.txt
     .env.example
   frontend/
@@ -83,7 +92,7 @@ Money_Mapping/
   docs/
     fabric_schema.sql       # manual pre-req DDL (Money Mapping's own tables —
                              # NOT dbo.DIM_RLS, which already exists)
-  data/                     # gitignored — app.duckdb + uploads/ live here
+  data/                     # gitignored — app.duckdb (admins/audit_logs) lives here
 ```
 
 ## Environment variables
@@ -96,6 +105,12 @@ FABRIC_DB_PORT=1433
 FABRIC_DB_NAME=<fabric-warehouse-name>
 FABRIC_DB_USER=<fabric-user>
 FABRIC_DB_PASS=<fabric-password>
+
+SFTP_HOST=sftp.arvindbrands.com
+SFTP_PORT=22
+SFTP_USER=<sftp-user>
+SFTP_PASS=<sftp-password>
+SFTP_ROOT=money_mapping_uploads
 ```
 
 `frontend/.env` (Vite, build-time):

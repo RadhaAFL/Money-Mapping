@@ -3,4 +3,5 @@ flask-cors>=4.0
 pyodbc>=5.0
 duckdb>=0.10
 python-dotenv>=1.0
+paramiko>=3.4
 gunicorn>=22.0; platform_system != "Windows"
