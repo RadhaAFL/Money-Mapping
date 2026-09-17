@@ -496,17 +496,19 @@ def capture_photo(capture_id):
 
 @app.route('/planograms', methods=['POST'])
 def upload_planogram():
+    """A planogram here is one whole-store blueprint layout (e.g. 'PMC
+    Bangalore - Layout'), not split per fixture type — uploading again for
+    a store replaces its blueprint (delete-then-insert keyed by store)."""
     err = _require_admin()
     if err: return err
     brand = request.form.get('brand', 'FLYING MACHINE').strip().upper()
-    fixture = request.form.get('fixture_type', '').strip()
-    store_code = request.form.get('store_code', '').strip().upper() or None
+    store_code = _normalize_store_code(request.form.get('store_code', ''))
     effective_date = request.form.get('effective_date', '').strip()
     email = request.form.get('email', '').strip().lower()
     file = request.files.get('file')
 
-    if fixture not in FIXTURE_TYPES:
-        return jsonify({"error": f"Unknown fixture_type: {fixture}"}), 400
+    if not store_code:
+        return jsonify({"error": "store_code is required"}), 400
     if not effective_date:
         return jsonify({"error": "effective_date is required"}), 400
     if not file:
@@ -525,24 +527,18 @@ def upload_planogram():
         conn = _fab_conn()
         conn.autocommit = True
         cursor = conn.cursor()
-        if store_code:
-            cursor.execute(
-                "DELETE FROM prd.DIM_UI_MONEY_MAPPING_PLANOGRAM WHERE BRAND=? AND FIXTURE_TYPE=? AND XSTORE_STORECODE=?",
-                [brand, fixture, store_code]
-            )
-        else:
-            cursor.execute(
-                "DELETE FROM prd.DIM_UI_MONEY_MAPPING_PLANOGRAM WHERE BRAND=? AND FIXTURE_TYPE=? AND XSTORE_STORECODE IS NULL",
-                [brand, fixture]
-            )
+        cursor.execute(
+            "DELETE FROM prd.DIM_UI_MONEY_MAPPING_PLANOGRAM WHERE BRAND=? AND XSTORE_STORECODE=?",
+            [brand, store_code]
+        )
         cursor.execute(
             """
             INSERT INTO prd.DIM_UI_MONEY_MAPPING_PLANOGRAM
-                (PLANOGRAM_ID, BRAND, FIXTURE_TYPE, XSTORE_STORECODE, FILE_PATH,
+                (PLANOGRAM_ID, BRAND, XSTORE_STORECODE, FILE_PATH,
                  EFFECTIVE_DATE, UPLOADED_BY_EMAIL, UPLOADED_AT, LOAD_RUN_DATE)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            [planogram_id, brand, fixture, store_code, file_rel_path,
+            [planogram_id, brand, store_code, file_rel_path,
              effective_date, email, datetime.utcnow(), _load_run_date()]
         )
     except Exception as e:
@@ -562,11 +558,8 @@ def upload_planogram():
 
 @app.route('/planograms', methods=['GET'])
 def list_planograms():
-    """List planograms — Head Office only. The technical planogram/blueprint
-    is HO-facing reference material, unlike captures which stores both
-    submit and can see their own. An optional store_code filter returns
-    that store's own planograms plus store-agnostic ones (XSTORE_STORECODE
-    IS NULL, i.e. 'applies to all stores for that fixture type')."""
+    """List planograms (whole-store blueprints) — Head Office only. An
+    optional store_code filter returns just that store's blueprint."""
     email = request.args.get('email', '').strip().lower()
     if not _is_admin(email):
         return jsonify({"error": "Admin access required"}), 403
@@ -574,7 +567,7 @@ def list_planograms():
 
     where, params = "", []
     if store_filter:
-        where = "WHERE XSTORE_STORECODE = ? OR XSTORE_STORECODE IS NULL"
+        where = "WHERE XSTORE_STORECODE = ?"
         params = [store_filter]
 
     conn = None
@@ -582,14 +575,14 @@ def list_planograms():
         conn = _fab_conn()
         cursor = conn.cursor()
         cursor.execute(f"""
-            SELECT PLANOGRAM_ID, BRAND, FIXTURE_TYPE, XSTORE_STORECODE, EFFECTIVE_DATE, UPLOADED_AT
+            SELECT PLANOGRAM_ID, BRAND, XSTORE_STORECODE, EFFECTIVE_DATE, UPLOADED_AT
             FROM prd.DIM_UI_MONEY_MAPPING_PLANOGRAM
             {where}
             ORDER BY UPLOADED_AT DESC
         """, params)
         planograms = [{
-            "planogram_id": r[0], "brand": r[1], "fixture_type": r[2],
-            "store_code": r[3], "effective_date": str(r[4]), "uploaded_at": str(r[5]),
+            "planogram_id": r[0], "brand": r[1],
+            "store_code": r[2], "effective_date": str(r[3]), "uploaded_at": str(r[4]),
         } for r in cursor.fetchall()]
     except Exception as e:
         return jsonify({"error": str(e)}), 500

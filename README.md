@@ -56,11 +56,11 @@ fixture areas) and the audit log — never capture/planogram data, and never
 store-level access. **Who may capture for which store is not decided by
 this app at all** — it's read live from the org's existing
 `dbo.DIM_RLS` table in Fabric (see Row-level access below), the same table
-already used for Power BI RLS elsewhere. Captures and planograms are
-INSERT-only (captures) or DELETE-then-INSERT-by-key (planograms, since a
-planogram is "current state per fixture") directly against Fabric, the same
-pattern SEMANTIC-LAYER's KPI-input portal already proves works at this
-scale.
+already used for Power BI RLS elsewhere. Captures are INSERT-only;
+planograms are DELETE-then-INSERT-by-store (a planogram is one whole-store
+blueprint layout, not split per fixture type — re-uploading for a store
+replaces its blueprint) directly against Fabric, the same pattern
+SEMANTIC-LAYER's KPI-input portal already proves works at this scale.
 
 Capture photos and planogram files themselves live on the org's in-house
 SFTP server (`backend/sftp_storage.py`), not on this VM's disk — Fabric's
@@ -175,8 +175,8 @@ Base path in production: `/moneymapping-api`
 | `GET` | `/captures/<id>/styles?email=` | Scanned style codes for one capture |
 | `GET` | `/captures/<id>/photo?email=` | Inline photo (`as_attachment=False`) |
 | `GET` | `/captures/summary?email=` | Admin-only: network coverage for the current month — total stores (`dbo.DIM_RLS`), stores with a capture, total capture count |
-| `POST` | `/planograms` | Admin-only, multipart: `caller_email, email, fixture_type, store_code (optional), effective_date, file` |
-| `GET` | `/planograms?email=&store_code=` | Admin-only — the blueprint planogram is HO-facing design reference, unlike captures which stores both submit and see their own |
+| `POST` | `/planograms` | Admin-only, multipart: `caller_email, email, store_code, effective_date, file` — one whole-store blueprint layout, replaces that store's existing blueprint |
+| `GET` | `/planograms?email=&store_code=` | Admin-only — the blueprint is HO-facing design reference, unlike captures which stores both submit and see their own |
 | `GET` | `/planograms/<id>/file?email=` | Admin-only file download |
 | `POST` | `/fixture-master` | Admin: `{store_code, fixture_type, fixture_label, area_sqft, caller_email}` — upsert by `(store_code, fixture_label)` |
 | `GET` | `/fixture-master?email=&store_code=` | List, RLS-filtered server-side same as `/captures` |

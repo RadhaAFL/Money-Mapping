@@ -70,8 +70,6 @@ function CoverageStats({ user }) {
 }
 
 function PlanogramPanel({ user }) {
-  const [fixtureTypes, setFixtureTypes] = useState([])
-  const [fixtureType, setFixtureType] = useState('')
   const [storeCode, setStoreCode] = useState('')
   const [effectiveDate, setEffectiveDate] = useState('')
   const [file, setFile] = useState(null)
@@ -80,10 +78,6 @@ function PlanogramPanel({ user }) {
   const [saved, setSaved] = useState('')
   const [planograms, setPlanograms] = useState([])
   const [listLoading, setListLoading] = useState(true)
-
-  useEffect(() => {
-    fetch(`${API}/fixture-types`).then(r => r.json()).then(d => setFixtureTypes(d.fixture_types || []))
-  }, [])
 
   const loadPlanograms = () => {
     setListLoading(true)
@@ -98,19 +92,18 @@ function PlanogramPanel({ user }) {
   const submit = async () => {
     setSaving(true); setError(''); setSaved('')
     try {
-      if (!fixtureType || !effectiveDate || !file) throw new Error('Fixture, effective date, and file are all required.')
+      if (!storeCode || !effectiveDate || !file) throw new Error('Store code, effective date, and file are all required.')
       const form = new FormData()
       form.append('email', user.email)
       form.append('caller_email', user.email)
-      form.append('fixture_type', fixtureType)
+      form.append('store_code', storeCode)
       form.append('effective_date', effectiveDate)
-      if (storeCode) form.append('store_code', storeCode)
       form.append('file', file)
       const res = await fetch(`${API}/planograms`, { method: 'POST', body: form })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Upload failed')
-      setSaved('Planogram uploaded.')
-      setFixtureType(''); setStoreCode(''); setEffectiveDate(''); setFile(null)
+      setSaved('Blueprint uploaded.')
+      setStoreCode(''); setEffectiveDate(''); setFile(null)
       loadPlanograms()
     } catch (e) {
       setError(e.message)
@@ -121,18 +114,14 @@ function PlanogramPanel({ user }) {
 
   return (
     <div className="mm-planogram-panel card">
-      <div className="eyebrow">Reference layout · Head Office only</div>
+      <div className="eyebrow">Store blueprint · Head Office only</div>
       <h3>Planograms</h3>
       <div className="mm-planogram-row">
-        <select value={fixtureType} onChange={e => setFixtureType(e.target.value)}>
-          <option value="">Fixture…</option>
-          {fixtureTypes.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
         <input
           type="text"
-          placeholder="Store code (blank = all stores)"
+          placeholder="Store code"
           value={storeCode}
-          onChange={e => setStoreCode(e.target.value)}
+          onChange={e => setStoreCode(e.target.value.toUpperCase())}
         />
         <input type="date" value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} />
         <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} />
@@ -146,13 +135,13 @@ function PlanogramPanel({ user }) {
 
       {!listLoading && (
         planograms.length === 0 ? (
-          <p className="mm-cc-hint">No planograms uploaded yet.</p>
+          <p className="mm-cc-hint">No blueprints uploaded yet.</p>
         ) : (
           <ul className="mm-planogram-list">
             {planograms.map(p => (
               <li key={p.planogram_id}>
                 <span>
-                  <strong>{p.store_code || 'All stores'}</strong> · {p.fixture_type}
+                  <strong>{p.store_code}</strong>
                   <span className="mm-planogram-date"> · {p.effective_date}</span>
                 </span>
                 <a

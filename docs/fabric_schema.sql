@@ -30,11 +30,12 @@ CREATE TABLE prd.DIM_UI_MONEY_MAPPING_CAPTURE_STYLE (
     LOAD_RUN_DATE  VARCHAR(20)  NOT NULL
 );
 
+-- One whole-store blueprint layout (e.g. "PMC Bangalore - Layout"), not
+-- split per fixture type — re-uploading for a store replaces its blueprint.
 CREATE TABLE prd.DIM_UI_MONEY_MAPPING_PLANOGRAM (
     PLANOGRAM_ID       VARCHAR(64)  NOT NULL,
     BRAND              VARCHAR(50)  NOT NULL,
-    FIXTURE_TYPE       VARCHAR(50)  NOT NULL,
-    XSTORE_STORECODE   VARCHAR(50)  NULL,    -- NULL = applies to all stores for that fixture type
+    XSTORE_STORECODE   VARCHAR(50)  NOT NULL,
     FILE_PATH          VARCHAR(500) NOT NULL,
     EFFECTIVE_DATE     DATE         NOT NULL,
     UPLOADED_BY_EMAIL  VARCHAR(200) NOT NULL,
