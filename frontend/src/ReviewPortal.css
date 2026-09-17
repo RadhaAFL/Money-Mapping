@@ -138,6 +138,16 @@
   margin-bottom: 14px;
 }
 .mm-detail-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+.mm-blueprint-card { max-width: 900px; }
+.mm-blueprint-photo {
+  width: 100%;
+  max-height: 75vh;
+  object-fit: contain;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+}
 .mm-detail-styles { margin-top: 16px; }
 .mm-detail-styles-label { font-weight: 600; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
 .mm-detail-styles ul { margin: 0; padding-left: 18px; }

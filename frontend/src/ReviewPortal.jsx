@@ -78,6 +78,7 @@ function PlanogramPanel({ user }) {
   const [saved, setSaved] = useState('')
   const [planograms, setPlanograms] = useState([])
   const [listLoading, setListLoading] = useState(true)
+  const [viewing, setViewing] = useState(null)
 
   const loadPlanograms = () => {
     setListLoading(true)
@@ -144,19 +145,33 @@ function PlanogramPanel({ user }) {
                   <strong>{p.store_code}</strong>
                   <span className="mm-planogram-date"> · {p.effective_date}</span>
                 </span>
-                <a
-                  className="btn-outline"
-                  href={`${API}/planograms/${p.planogram_id}/file?email=${encodeURIComponent(user.email)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <button className="btn-outline" onClick={() => setViewing(p)}>
                   <span className="msi">grid_view</span>
                   View
-                </a>
+                </button>
               </li>
             ))}
           </ul>
         )
+      )}
+
+      {viewing && (
+        <div className="mm-detail-backdrop" onClick={() => setViewing(null)}>
+          <div className="mm-detail-card mm-blueprint-card" onClick={e => e.stopPropagation()}>
+            <button className="mm-detail-close" onClick={() => setViewing(null)}>
+              <span className="msi">close</span>
+            </button>
+            <img
+              className="mm-blueprint-photo"
+              src={`${API}/planograms/${viewing.planogram_id}/file?email=${encodeURIComponent(user.email)}`}
+              alt={`Blueprint for ${viewing.store_code}`}
+            />
+            <div className="mm-detail-meta">
+              <div><strong>{viewing.store_code}</strong> — blueprint layout</div>
+              <div className="mm-detail-sub">Effective {viewing.effective_date}</div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
