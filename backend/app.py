@@ -149,12 +149,40 @@ def _normalize_store_code(raw: str) -> str:
     return s
 
 
+def _pilot_stores() -> set:
+    """Store codes currently in the Money Mapping pilot: BRAND='FM' AND
+    FORMAT='Fresh' in the org's store master (prd.DIM_FTP_CONSOLIDATED_
+    STORE_MASTER_DOOR). While the pilot is scoped to these ~200 stores, no
+    other store is usable in this app — not even one with a DIM_RLS match —
+    so this gate is applied everywhere store eligibility is decided, admins
+    included. Queried live each call (no caching), same convention as
+    _stores_for_email()."""
+    conn = None
+    try:
+        conn = _fab_conn()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT X_STORE_CODE
+            FROM prd.DIM_FTP_CONSOLIDATED_STORE_MASTER_DOOR
+            WHERE UPPER(BRAND) = 'FM' AND UPPER(FORMAT) = 'FRESH'
+        """)
+        return {_normalize_store_code(str(r[0])) for r in cursor.fetchall() if r[0] is not None}
+    except Exception:
+        print("Pilot store lookup failed:", traceback.format_exc(), flush=True)
+        return set()
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def _stores_for_email(email: str) -> set:
     """Store codes this email is the store-side login for, per the org's
     existing dbo.DIM_RLS.EMAIL_ID — the single source of truth for who may
     capture for a store. Deliberately does NOT check the RM/ARM/CM/... columns
     on that table: those grant Power BI *viewing* visibility up the hierarchy,
-    not permission to submit a capture as that store."""
+    not permission to submit a capture as that store. Intersected with the
+    pilot store list (see _pilot_stores()) — a DIM_RLS match alone is not
+    enough while the pilot is scoped to ~200 stores."""
     email = (email or '').strip().lower()
     if not email:
         return set()
@@ -163,25 +191,27 @@ def _stores_for_email(email: str) -> set:
         conn = _fab_conn()
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT STORE FROM dbo.DIM_RLS WHERE LOWER(EMAIL_ID) = ?", [email])
-        return {_normalize_store_code(r[0]) for r in cursor.fetchall() if r[0]}
+        stores = {_normalize_store_code(r[0]) for r in cursor.fetchall() if r[0]}
     except Exception:
         print("DIM_RLS lookup failed:", traceback.format_exc(), flush=True)
         return set()
     finally:
         if conn is not None:
             conn.close()
+    return stores & _pilot_stores()
 
 
 def _check_store_access(email: str, store_code: str) -> bool:
-    """True if caller is admin, or store_code is among the stores dbo.DIM_RLS
-    lists that email's EMAIL_ID against. False (never implicitly-allow) if
-    the lookup returns nothing — a user with no matching row must not be able
-    to submit for arbitrary stores."""
+    """True if store_code is a pilot store AND (caller is admin, or
+    store_code is among the stores dbo.DIM_RLS lists that email's EMAIL_ID
+    against). False (never implicitly-allow) if either check comes up
+    empty — a user with no matching row, or a store outside the pilot,
+    must not be able to submit for that store."""
     store_code = _normalize_store_code(store_code)
     if not store_code:
         return False
     if _is_admin(email):
-        return True
+        return store_code in _pilot_stores()
     return store_code in _stores_for_email(email)
 
 
@@ -210,24 +240,14 @@ def categories():
 
 @app.route('/stores', methods=['GET'])
 def list_stores():
-    """Admin-only: every distinct store code in dbo.DIM_RLS, normalized.
-    Lets an admin capture on behalf of any store (they already bypass
-    _check_store_access) without needing their own EMAIL_ID row there."""
+    """Admin-only: every pilot store (see _pilot_stores()). Lets an admin
+    capture on behalf of any pilot store (they already bypass
+    _check_store_access's DIM_RLS check, but not its pilot check) without
+    needing their own EMAIL_ID row in dbo.DIM_RLS."""
     email = request.args.get('email', '').strip().lower()
     if not _is_admin(email):
         return jsonify({"error": "Admin access required"}), 403
-    conn = None
-    try:
-        conn = _fab_conn()
-        cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT STORE FROM dbo.DIM_RLS")
-        codes = sorted({_normalize_store_code(r[0]) for r in cursor.fetchall() if r[0]})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if conn is not None:
-            conn.close()
-    return jsonify({"stores": codes})
+    return jsonify({"stores": sorted(_pilot_stores())})
 
 
 # ── Captures ────────────────────────────────────────────────────────────────
@@ -394,20 +414,19 @@ def list_captures():
 
 @app.route('/captures/summary', methods=['GET'])
 def captures_summary():
-    """Admin-only network coverage snapshot for the current calendar month:
-    total stores (from dbo.DIM_RLS, the whole network Money Mapping could
-    ever reach), how many of those actually have a capture this month, and
-    how many capture rows (walls) that adds up to."""
+    """Admin-only pilot coverage snapshot for the current calendar month:
+    total stores in the pilot (see _pilot_stores()), how many of those
+    actually have a capture this month, and how many capture rows (walls)
+    that adds up to."""
     email = request.args.get('email', '').strip().lower()
     if not _is_admin(email):
         return jsonify({"error": "Admin access required"}), 403
 
+    total_stores = len(_pilot_stores())
     conn = None
     try:
         conn = _fab_conn()
         cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT STORE FROM dbo.DIM_RLS")
-        total_stores = len({_normalize_store_code(r[0]) for r in cursor.fetchall() if r[0]})
         cursor.execute("""
             SELECT COUNT(DISTINCT XSTORE_STORECODE), COUNT(*)
             FROM prd.DIM_UI_MONEY_MAPPING_CAPTURE

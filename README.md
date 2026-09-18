@@ -205,8 +205,23 @@ store's data on the Power BI side; they do not grant permission to submit a
 capture *as* that store. A user with no matching `EMAIL_ID` row gets zero
 stores back — there is no implicit "no restriction = see everything"
 fallback here, unlike SEMANTIC-LAYER's read-side RLS convention. Admins
-(the small `admins` table in DuckDB) bypass this check entirely, for the
-Review/Fixture-areas/Planogram-upload screens.
+(the small `admins` table in DuckDB) bypass the DIM_RLS check for the
+Review/Fixture-areas/Planogram-upload screens, but not the pilot-store gate
+below — nobody, admin included, can act on a store outside the pilot.
+
+### Pilot store gate
+
+Money Mapping is currently piloted on a subset of stores, not the whole
+network: `_pilot_stores()` in `app.py` queries
+`prd.DIM_FTP_CONSOLIDATED_STORE_MASTER_DOOR` for `X_STORE_CODE` where
+`BRAND = 'FM' AND FORMAT = 'Fresh'` (~200 stores), normalized the same way
+as `dbo.DIM_RLS.STORE`. `_stores_for_email()` intersects with this set, and
+`_check_store_access()` checks it directly for the admin-bypass path — so a
+store outside the pilot is unusable even for an admin explicitly typing its
+code into "Capture for a store," and `/stores` (that screen's store list)
+and `/captures/summary`'s `total_stores` both only ever show pilot stores.
+Widening the pilot later just means adding rows to that store master table
+(or dropping the `BRAND`/`FORMAT` filter entirely) — no code change needed.
 
 `STORE` in `dbo.DIM_RLS` carries channel-variant prefixes around the same
 physical store — `8172`, `NON-8172`, `O8172`, `T8172` all mean the same
