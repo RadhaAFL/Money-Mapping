@@ -15,6 +15,8 @@ const FIXTURE_META = {
   'Wall':                { icon: 'grid_view',         desc: 'Main wall display' },
   'Hang Rail':            { icon: 'checkroom',         desc: 'Hanging rail' },
   'Table':                { icon: 'table_restaurant',  desc: 'Folded table display' },
+  'CTM Table':            { icon: 'table_restaurant',  desc: 'CTM table display' },
+  'CTM Wall':             { icon: 'grid_view',         desc: 'CTM wall display' },
   'Denim Wall':           { icon: 'dry_cleaning',      desc: 'Denim-focused wall' },
   'Laundered Black':      { icon: 'dark_mode',         desc: 'Laundered black wall' },
   'Mannequin / Window':    { icon: 'accessibility_new', desc: 'Mannequin or window display' },

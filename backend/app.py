@@ -73,7 +73,7 @@ def _fab_conn():
 
 
 FIXTURE_TYPES = [
-    "Facade", "Wall", "Hang Rail", "Table",
+    "Facade", "Wall", "Hang Rail", "Table", "CTM Table", "CTM Wall",
     "Denim Wall", "Laundered Black", "Mannequin / Window",
 ]
 
