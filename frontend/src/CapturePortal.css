@@ -84,8 +84,21 @@
   display: flex;
   gap: 8px;
   margin-top: 4px;
+  align-items: flex-end;
 }
-.mm-manual-add input { flex: 1; }
+.mm-manual-add textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 42px;
+  max-height: 160px;
+  padding: 11px 12px;
+  border: 1px solid var(--outline-soft);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 15px;
+  font-family: inherit;
+}
 
 .mm-excel-upload {
   width: fit-content;

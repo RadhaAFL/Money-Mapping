@@ -184,8 +184,17 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
 
   const removeStyle = style => setScannedStyles(prev => prev.filter(s => s !== style))
   const addManualStyle = () => {
-    const val = manualStyle.trim()
-    if (val && !scannedStyles.includes(val)) setScannedStyles(prev => [...prev, val])
+    // Splits on newlines and/or commas, so pasting a whole list (one per
+    // line, or comma-separated) adds every code at once — not just typing
+    // a single one.
+    const codes = manualStyle.split(/[\n\r,]+/).map(s => s.trim()).filter(Boolean)
+    if (codes.length > 0) {
+      setScannedStyles(prev => {
+        const merged = [...prev]
+        for (const code of codes) if (!merged.includes(code)) merged.push(code)
+        return merged
+      })
+    }
     setManualStyle('')
   }
 
@@ -381,12 +390,14 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
                 )}
 
               <div className="mm-manual-add">
-                <input
-                  type="text"
-                  placeholder="Or type a style code"
+                <textarea
+                  rows={1}
+                  placeholder="Type a style code, or paste a whole list (one per line, or comma-separated)"
                   value={manualStyle}
                   onChange={e => setManualStyle(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addManualStyle()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addManualStyle() }
+                  }}
                 />
                 <button className="btn-outline" onClick={addManualStyle}>
                   <span className="msi">add</span>
