@@ -429,7 +429,16 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
 
             <div className="mm-step-actions">
               <button className="btn-outline" onClick={() => { resetCaptureState(); setView('home') }}>Cancel</button>
-              <button className="btn-primary" onClick={() => setView('preview')} disabled={!canReview}>
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  // Don't silently drop a pasted/typed list left sitting in
+                  // the box if it was never explicitly "Add"ed.
+                  if (manualStyle.trim()) addManualStyle()
+                  setView('preview')
+                }}
+                disabled={!canReview}
+              >
                 <span className="msi">visibility</span>
                 Review
               </button>
