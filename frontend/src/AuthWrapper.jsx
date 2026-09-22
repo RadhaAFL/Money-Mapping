@@ -5,6 +5,7 @@ import { logEvent } from './logger'
 import CapturePortal from './CapturePortal'
 import ReviewPortal from './ReviewPortal'
 import FixtureMasterPage from './FixtureMasterPage'
+import flyingMachineLogo from './assets/flying-machine-logo.png'
 import './AuthWrapper.css'
 
 const API = '/moneymapping-api'
@@ -27,8 +28,7 @@ function HeroSplit({ children }) {
     <div className="mm-hero-split">
       <div className="mm-hero-panel">
         <div className="mm-hero-brand">
-          <span className="msi">flight</span>
-          Flying Machine
+          <img src={flyingMachineLogo} alt="Flying Machine" className="mm-hero-logo" />
         </div>
         <div className="mm-hero-copy">
           <div className="mm-hero-headline">

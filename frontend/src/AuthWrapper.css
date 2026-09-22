@@ -29,15 +29,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: var(--font-label);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
   position: relative;
   z-index: 1;
 }
-.mm-hero-brand .msi { font-size: 20px; }
+.mm-hero-logo { height: 26px; width: auto; display: block; }
 
 .mm-hero-copy { position: relative; z-index: 1; }
 .mm-hero-headline {
