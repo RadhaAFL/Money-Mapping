@@ -17,6 +17,7 @@ const FIXTURE_META = {
   'Table':                { icon: 'table_restaurant',  desc: 'Folded table display' },
   'CTM Table':            { icon: 'table_restaurant',  desc: 'CTM table display' },
   'CTM Wall':             { icon: 'grid_view',         desc: 'CTM wall display' },
+  'Denim Table':          { icon: 'table_restaurant',  desc: 'Denim-focused table' },
   'Denim Wall':           { icon: 'dry_cleaning',      desc: 'Denim-focused wall' },
   'Laundered Black':      { icon: 'dark_mode',         desc: 'Laundered black wall' },
   'Mannequin / Window':    { icon: 'accessibility_new', desc: 'Mannequin or window display' },
@@ -102,6 +103,8 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
   const [allStores, setAllStores] = useState([])
   const [storeCode, setStoreCode] = useState(user.storeCodes[0] || '')
   const [fixtureType, setFixtureType] = useState('')
+  const [fixtureLabels, setFixtureLabels] = useState([])
+  const [fixtureLabel, setFixtureLabel] = useState('')
   const [photoBlob, setPhotoBlob] = useState(null)
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState('')
   const [scannedStyles, setScannedStyles] = useState([])
@@ -129,6 +132,20 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
       .then(d => setAllStores(d.stores || []))
       .catch(() => setAllStores([]))
   }, [allowAnyStore, user.email])
+
+  // Which specific instance of this fixture type (e.g. "Wall 1", "Wall 2")
+  // — sourced from whatever Head Office has already set up in Fixture
+  // Master for this store+fixture. Falls back to free text if HO hasn't
+  // set any up yet for this combination, so capture is never blocked on it.
+  useEffect(() => {
+    setFixtureLabel('')
+    if (!storeCode || !fixtureType) { setFixtureLabels([]); return }
+    const params = new URLSearchParams({ email: user.email, store_code: storeCode, fixture_type: fixtureType })
+    fetch(`${API}/fixture-master?${params}`)
+      .then(r => r.json())
+      .then(d => setFixtureLabels((d.fixtures || []).map(f => f.fixture_label)))
+      .catch(() => setFixtureLabels([]))
+  }, [storeCode, fixtureType, user.email])
 
   const loadRecentCaptures = () => {
     if (!storeCode) return
@@ -196,6 +213,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
 
   const resetCaptureState = () => {
     setFixtureType('')
+    setFixtureLabel('')
     setPhotoBlob(null)
     setPhotoPreviewUrl('')
     setScannedStyles([])
@@ -211,6 +229,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
       form.append('name', user.displayName)
       form.append('store_code', storeCode)
       form.append('fixture_type', fixtureType)
+      form.append('fixture_label', fixtureLabel.trim())
       form.append('styles', JSON.stringify(scannedStyles))
       form.append('photo', photoBlob, 'capture.jpg')
 
@@ -231,7 +250,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
   }
 
   const storeOptions = useMemo(() => user.storeCodes, [user.storeCodes])
-  const canReview = fixtureType && photoBlob
+  const canReview = fixtureType && photoBlob && (fixtureLabels.length === 0 || fixtureLabel)
 
   return (
     <div className="mm-capture-page">
@@ -285,7 +304,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
                   {recentCaptures.map(c => (
                     <li key={c.capture_id}>
                       <span className="msi">{(FIXTURE_META[c.fixture_type] || {}).icon || 'category'}</span>
-                      <span>{c.fixture_type}</span>
+                      <span>{c.fixture_type}{c.fixture_label ? ` · ${c.fixture_label}` : ''}</span>
                       <span className="mm-recent-date">{c.captured_at.slice(0, 10)}</span>
                     </li>
                   ))}
@@ -311,6 +330,23 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
               <span>{fixtureType}</span>
               <button className="mm-link-btn" onClick={() => setPickerOpen(true)}>Change</button>
             </div>
+
+            <label className="mm-field card">
+              <span className="eyebrow">Which {fixtureType.toLowerCase()}?</span>
+              {fixtureLabels.length > 0 ? (
+                <select value={fixtureLabel} onChange={e => setFixtureLabel(e.target.value)}>
+                  <option value="">Select…</option>
+                  {fixtureLabels.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder={`e.g. ${fixtureType} 1 (optional — not set up by Head Office yet)`}
+                  value={fixtureLabel}
+                  onChange={e => setFixtureLabel(e.target.value)}
+                />
+              )}
+            </label>
 
             <label className="mm-field card">
               <span className="eyebrow">Photo</span>
@@ -397,7 +433,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
               <img className="mm-photo-preview" src={photoPreviewUrl} alt="Capture preview" />
               <div className="mm-preview-row">
                 <span className="msi">{(FIXTURE_META[fixtureType] || {}).icon || 'category'}</span>
-                <strong>{fixtureType}</strong>
+                <strong>{fixtureType}{fixtureLabel ? ` — ${fixtureLabel}` : ''}</strong>
                 <span className="mm-preview-store">{storeCode}</span>
               </div>
               {scannedStyles.length > 0 ? (

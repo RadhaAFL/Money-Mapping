@@ -24,7 +24,7 @@ function CaptureDetail({ user, capture, onClose }) {
           alt={`${capture.fixture_type} at ${capture.store_code}`}
         />
         <div className="mm-detail-meta">
-          <div><strong>{capture.store_code}</strong> — {capture.fixture_type}</div>
+          <div><strong>{capture.store_code}</strong> — {capture.fixture_type}{capture.fixture_label ? ` (${capture.fixture_label})` : ''}</div>
           <div className="mm-detail-sub">{capture.submitted_by_name || capture.submitted_by_email} · {capture.captured_at}</div>
         </div>
         <div className="mm-detail-styles">
@@ -247,7 +247,7 @@ export default function ReviewPortal({ user }) {
                 loading="lazy"
               />
               <div className="mm-capture-card-body">
-                <div className="mm-capture-card-title">{c.store_code} · {c.fixture_type}</div>
+                <div className="mm-capture-card-title">{c.store_code} · {c.fixture_type}{c.fixture_label ? ` (${c.fixture_label})` : ''}</div>
                 <div className="mm-capture-card-sub">{c.style_count} styles · {c.captured_at.slice(0, 10)}</div>
               </div>
             </div>

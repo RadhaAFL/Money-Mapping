@@ -73,7 +73,7 @@ def _fab_conn():
 
 
 FIXTURE_TYPES = [
-    "Facade", "Wall", "Hang Rail", "Table", "CTM Table", "CTM Wall",
+    "Facade", "Wall", "Hang Rail", "Table", "CTM Table", "CTM Wall", "Denim Table",
     "Denim Wall", "Laundered Black", "Mannequin / Window",
 ]
 
@@ -260,6 +260,7 @@ def submit_capture():
     sap_code   = request.form.get('sap_store_code', '').strip()
     brand      = request.form.get('brand', 'FLYING MACHINE').strip().upper()
     fixture    = request.form.get('fixture_type', '').strip()
+    fixture_label = request.form.get('fixture_label', '').strip() or None
     styles_raw = request.form.get('styles', '[]')
     photo      = request.files.get('photo')
 
@@ -294,12 +295,12 @@ def submit_capture():
         cursor.execute(
             """
             INSERT INTO prd.DIM_UI_MONEY_MAPPING_CAPTURE
-                (CAPTURE_ID, XSTORE_STORECODE, SAP_STORECODE, BRAND, FIXTURE_TYPE,
+                (CAPTURE_ID, XSTORE_STORECODE, SAP_STORECODE, BRAND, FIXTURE_TYPE, FIXTURE_LABEL,
                  PHOTO_PATH, STYLE_COUNT, STATUS, CAPTURED_AT,
                  SUBMITTED_BY_EMAIL, SUBMITTED_BY_NAME, LOAD_RUN_DATE)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            [capture_id, store_code, sap_code or None, brand, fixture,
+            [capture_id, store_code, sap_code or None, brand, fixture, fixture_label,
              photo_rel_path, len(styles), 'SUBMITTED', datetime.utcnow(),
              email, name, load_run_date]
         )
@@ -389,7 +390,7 @@ def list_captures():
         cursor = conn.cursor()
         cursor.execute(
             f"""
-            SELECT CAPTURE_ID, XSTORE_STORECODE, BRAND, FIXTURE_TYPE, STYLE_COUNT,
+            SELECT CAPTURE_ID, XSTORE_STORECODE, BRAND, FIXTURE_TYPE, FIXTURE_LABEL, STYLE_COUNT,
                    STATUS, CAPTURED_AT, SUBMITTED_BY_EMAIL, SUBMITTED_BY_NAME
             FROM prd.DIM_UI_MONEY_MAPPING_CAPTURE
             {where}
@@ -399,8 +400,8 @@ def list_captures():
         )
         captures = [{
             "capture_id": r[0], "store_code": r[1], "brand": r[2], "fixture_type": r[3],
-            "style_count": r[4], "status": r[5], "captured_at": str(r[6]),
-            "submitted_by_email": r[7], "submitted_by_name": r[8],
+            "fixture_label": r[4], "style_count": r[5], "status": r[6], "captured_at": str(r[7]),
+            "submitted_by_email": r[8], "submitted_by_name": r[9],
         } for r in cursor.fetchall()]
     except Exception as e:
         print("List captures failed:", traceback.format_exc(), flush=True)
@@ -699,6 +700,7 @@ def list_fixture_master():
         return jsonify({"error": "email is required"}), 400
     is_admin = _is_admin(email)
     requested_store = _normalize_store_code(request.args.get('store_code', ''))
+    requested_fixture = request.args.get('fixture_type', '').strip()
 
     if is_admin:
         allowed_stores = None
@@ -719,6 +721,9 @@ def list_fixture_master():
     elif requested_store:
         conditions.append("XSTORE_STORECODE = ?")
         params.append(requested_store)
+    if requested_fixture:
+        conditions.append("FIXTURE_TYPE = ?")
+        params.append(requested_fixture)
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
     conn = None

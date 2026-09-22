@@ -170,7 +170,7 @@ Base path in production: `/moneymapping-api`
 | `GET` | `/check-access?email=` | `{allowed, is_admin, store_codes}` — `store_codes` comes live from `dbo.DIM_RLS` |
 | `GET` | `/fixture-types` | Static list of the 7 fixture types |
 | `GET` | `/stores?email=` | Admin-only: every distinct store code in `dbo.DIM_RLS` — lets an admin capture on behalf of any store, since admins already bypass the store-access check |
-| `POST` | `/captures` | multipart: `email, name, store_code, fixture_type, styles (JSON array), photo` |
+| `POST` | `/captures` | multipart: `email, name, store_code, fixture_type, fixture_label (optional), styles (JSON array), photo` |
 | `GET` | `/captures?email=&store_code=&fixture_type=&from_date=&to_date=` | List, RLS-filtered server-side |
 | `GET` | `/captures/<id>/styles?email=` | Scanned style codes for one capture |
 | `GET` | `/captures/<id>/photo?email=` | Inline photo (`as_attachment=False`) |
@@ -179,7 +179,7 @@ Base path in production: `/moneymapping-api`
 | `GET` | `/planograms?email=&store_code=` | Admin-only — the blueprint is HO-facing design reference, unlike captures which stores both submit and see their own |
 | `GET` | `/planograms/<id>/file?email=` | Admin-only file download |
 | `POST` | `/fixture-master` | Admin: `{store_code, fixture_type, fixture_label, area_sqft, caller_email}` — upsert by `(store_code, fixture_label)` |
-| `GET` | `/fixture-master?email=&store_code=` | List, RLS-filtered server-side same as `/captures` |
+| `GET` | `/fixture-master?email=&store_code=&fixture_type=` | List, RLS-filtered server-side same as `/captures` — the capture flow uses this (filtered to one store+fixture type) to populate the "which Wall/Table/…" instance picker |
 | `POST` | `/logs`, `GET /logs?caller_email=` | Audit log write / admin read |
 
 Note the `email` vs. `caller_email` split on admin endpoints that also
