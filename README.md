@@ -256,8 +256,25 @@ Timeout 300
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^ /moneymapping/index.html [L]
+
+    # index.html must always be revalidated so a stale SPA shell never
+    # keeps referencing an old, since-deleted hashed JS/CSS bundle after a
+    # deploy (browsers otherwise heuristically cache it with no explicit
+    # Cache-Control header — this is what caused a stale pre-fixture-label
+    # build to render style codes as a comma blob for one user).
+    <Files "index.html">
+        Header set Cache-Control "no-cache, must-revalidate"
+    </Files>
+</Directory>
+
+# Hashed asset filenames (assets/index-<hash>.js etc.) change whenever
+# their content does, so these are safe to cache for a long time.
+<Directory /home/appuser/money-mapping/frontend/dist/assets>
+    Header set Cache-Control "public, max-age=31536000, immutable"
 </Directory>
 ```
+
+Requires `mod_headers` (`sudo a2enmod headers`) — already enabled on this VM.
 
 systemd (`money-mapping-api.service`):
 
