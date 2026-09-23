@@ -228,6 +228,9 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
     setScannedStyles([])
     setScannerActive(false)
     setError('')
+    // Otherwise the previous capture's "Captured — N styles logged."
+    // banner keeps showing through the next capture's whole review step.
+    setSaved('')
   }
 
   const submit = async () => {
