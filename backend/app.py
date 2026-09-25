@@ -261,7 +261,6 @@ def submit_capture():
     brand      = request.form.get('brand', 'FLYING MACHINE').strip().upper()
     fixture    = request.form.get('fixture_type', '').strip()
     fixture_label = request.form.get('fixture_label', '').strip() or None
-    bays_raw   = request.form.get('bays', '').strip()
     styles_raw = request.form.get('styles', '[]')
     photo      = request.files.get('photo')
 
@@ -271,15 +270,6 @@ def submit_capture():
         return jsonify({"error": f"Unknown fixture_type: {fixture}"}), 400
     if not photo:
         return jsonify({"error": "photo is required"}), 400
-
-    bays = None
-    if bays_raw:
-        try:
-            bays = int(bays_raw)
-            if bays < 0:
-                raise ValueError
-        except ValueError:
-            return jsonify({"error": "bays must be a non-negative whole number"}), 400
 
     try:
         styles = json.loads(styles_raw)
@@ -305,12 +295,12 @@ def submit_capture():
         cursor.execute(
             """
             INSERT INTO prd.DIM_UI_MONEY_MAPPING_CAPTURE
-                (CAPTURE_ID, XSTORE_STORECODE, SAP_STORECODE, BRAND, FIXTURE_TYPE, FIXTURE_LABEL, BAYS,
+                (CAPTURE_ID, XSTORE_STORECODE, SAP_STORECODE, BRAND, FIXTURE_TYPE, FIXTURE_LABEL,
                  PHOTO_PATH, STYLE_COUNT, STATUS, CAPTURED_AT,
                  SUBMITTED_BY_EMAIL, SUBMITTED_BY_NAME, LOAD_RUN_DATE)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            [capture_id, store_code, sap_code or None, brand, fixture, fixture_label, bays,
+            [capture_id, store_code, sap_code or None, brand, fixture, fixture_label,
              photo_rel_path, len(styles), 'SUBMITTED', datetime.utcnow(),
              email, name, load_run_date]
         )
@@ -400,7 +390,7 @@ def list_captures():
         cursor = conn.cursor()
         cursor.execute(
             f"""
-            SELECT CAPTURE_ID, XSTORE_STORECODE, BRAND, FIXTURE_TYPE, FIXTURE_LABEL, BAYS, STYLE_COUNT,
+            SELECT CAPTURE_ID, XSTORE_STORECODE, BRAND, FIXTURE_TYPE, FIXTURE_LABEL, STYLE_COUNT,
                    STATUS, CAPTURED_AT, SUBMITTED_BY_EMAIL, SUBMITTED_BY_NAME
             FROM prd.DIM_UI_MONEY_MAPPING_CAPTURE
             {where}
@@ -410,8 +400,8 @@ def list_captures():
         )
         captures = [{
             "capture_id": r[0], "store_code": r[1], "brand": r[2], "fixture_type": r[3],
-            "fixture_label": r[4], "bays": r[5], "style_count": r[6], "status": r[7], "captured_at": str(r[8]),
-            "submitted_by_email": r[9], "submitted_by_name": r[10],
+            "fixture_label": r[4], "style_count": r[5], "status": r[6], "captured_at": str(r[7]),
+            "submitted_by_email": r[8], "submitted_by_name": r[9],
         } for r in cursor.fetchall()]
     except Exception as e:
         print("List captures failed:", traceback.format_exc(), flush=True)

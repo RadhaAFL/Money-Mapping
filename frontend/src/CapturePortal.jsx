@@ -105,7 +105,6 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
   const [fixtureType, setFixtureType] = useState('')
   const [fixtureLabels, setFixtureLabels] = useState([])
   const [fixtureLabel, setFixtureLabel] = useState('')
-  const [bays, setBays] = useState('')
   const [photoBlob, setPhotoBlob] = useState(null)
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState('')
   const [scannedStyles, setScannedStyles] = useState([])
@@ -140,7 +139,6 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
   // set any up yet for this combination, so capture is never blocked on it.
   useEffect(() => {
     setFixtureLabel('')
-    setBays('')
     if (!storeCode || !fixtureType) { setFixtureLabels([]); return }
     const params = new URLSearchParams({ email: user.email, store_code: storeCode, fixture_type: fixtureType })
     fetch(`${API}/fixture-master?${params}`)
@@ -225,7 +223,6 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
   const resetCaptureState = () => {
     setFixtureType('')
     setFixtureLabel('')
-    setBays('')
     setPhotoBlob(null)
     setPhotoPreviewUrl('')
     setScannedStyles([])
@@ -245,7 +242,6 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
       form.append('store_code', storeCode)
       form.append('fixture_type', fixtureType)
       form.append('fixture_label', fixtureLabel.trim())
-      form.append('bays', bays.trim())
       form.append('styles', JSON.stringify(scannedStyles))
       form.append('photo', photoBlob, 'capture.jpg')
 
@@ -320,7 +316,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
                   {recentCaptures.map(c => (
                     <li key={c.capture_id}>
                       <span className="msi">{(FIXTURE_META[c.fixture_type] || {}).icon || 'category'}</span>
-                      <span>{c.fixture_type}{c.fixture_label ? ` · ${c.fixture_label}` : ''}{c.bays ? ` · ${c.bays} bay${c.bays === 1 ? '' : 's'}` : ''}</span>
+                      <span>{c.fixture_type}{c.fixture_label ? ` · ${c.fixture_label}` : ''}</span>
                       <span className="mm-recent-date">{c.captured_at.slice(0, 10)}</span>
                     </li>
                   ))}
@@ -362,14 +358,6 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
                   onChange={e => setFixtureLabel(e.target.value)}
                 />
               )}
-              <span className="eyebrow mm-bays-label">Bays (optional)</span>
-              <input
-                type="number"
-                min="0"
-                placeholder="e.g. 3"
-                value={bays}
-                onChange={e => setBays(e.target.value)}
-              />
             </label>
 
             <label className="mm-field card">
@@ -468,7 +456,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
               <img className="mm-photo-preview" src={photoPreviewUrl} alt="Capture preview" />
               <div className="mm-preview-row">
                 <span className="msi">{(FIXTURE_META[fixtureType] || {}).icon || 'category'}</span>
-                <strong>{fixtureType}{fixtureLabel ? ` — ${fixtureLabel}` : ''}{bays ? ` · ${bays} bay${bays === '1' ? '' : 's'}` : ''}</strong>
+                <strong>{fixtureType}{fixtureLabel ? ` — ${fixtureLabel}` : ''}</strong>
                 <span className="mm-preview-store">{storeCode}</span>
               </div>
               {scannedStyles.length > 0 ? (

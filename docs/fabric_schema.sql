@@ -15,7 +15,6 @@ CREATE TABLE prd.DIM_UI_MONEY_MAPPING_CAPTURE (
     BRAND               VARCHAR(50)   NOT NULL,   -- 'FLYING MACHINE'
     FIXTURE_TYPE        VARCHAR(50)   NOT NULL,   -- Wall/Table/Facade/Hang Rail/CTM Table/CTM Wall/Denim Table/Denim Wall/Laundered Black/Mannequin / Window
     FIXTURE_LABEL       VARCHAR(100)  NULL,       -- which instance of that fixture type (e.g. 'Wall 1') — matches DIM_UI_MONEY_MAPPING_FIXTURE_MASTER.FIXTURE_LABEL when set up; NULL if the store has no fixture master rows for that type yet
-    BAYS                INT           NULL,       -- optional bay count for this fixture, free entry by the store user
     PHOTO_PATH          VARCHAR(500)  NOT NULL,   -- relative path on the SFTP server
     STYLE_COUNT         INT           NOT NULL,
     STATUS              VARCHAR(20)   NOT NULL,   -- SUBMITTED / REVIEWED / REJECTED
@@ -24,9 +23,8 @@ CREATE TABLE prd.DIM_UI_MONEY_MAPPING_CAPTURE (
     SUBMITTED_BY_NAME   VARCHAR(200)  NULL,
     LOAD_RUN_DATE       VARCHAR(20)   NOT NULL
 );
--- On an existing deployment (these columns added after go-live), apply as:
+-- On an existing deployment (this column added after go-live), apply as:
 -- ALTER TABLE prd.DIM_UI_MONEY_MAPPING_CAPTURE ADD FIXTURE_LABEL VARCHAR(100) NULL;
--- ALTER TABLE prd.DIM_UI_MONEY_MAPPING_CAPTURE ADD BAYS INT NULL;
 
 CREATE TABLE prd.DIM_UI_MONEY_MAPPING_CAPTURE_STYLE (
     CAPTURE_ID     VARCHAR(64)  NOT NULL,   -- app-level FK only, no enforced constraint
