@@ -37,7 +37,9 @@
   gap: 10px;
   padding: 16px;
 }
-.mm-field select, .mm-field input[type="text"] {
+.mm-bays-label { margin-top: 4px; }
+
+.mm-field select, .mm-field input[type="text"], .mm-field input[type="number"] {
   padding: 11px 12px;
   border: 1px solid var(--outline-soft);
   border-radius: var(--radius-sm);

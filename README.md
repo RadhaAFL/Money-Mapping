@@ -170,7 +170,7 @@ Base path in production: `/moneymapping-api`
 | `GET` | `/check-access?email=` | `{allowed, is_admin, store_codes}` — `store_codes` comes live from `dbo.DIM_RLS` |
 | `GET` | `/fixture-types` | Static list of the 7 fixture types |
 | `GET` | `/stores?email=` | Admin-only: every distinct store code in `dbo.DIM_RLS` — lets an admin capture on behalf of any store, since admins already bypass the store-access check |
-| `POST` | `/captures` | multipart: `email, name, store_code, fixture_type, fixture_label (optional), styles (JSON array), photo` |
+| `POST` | `/captures` | multipart: `email, name, store_code, fixture_type, fixture_label (optional), bays (optional, whole number), styles (JSON array), photo` |
 | `GET` | `/captures?email=&store_code=&fixture_type=&from_date=&to_date=` | List, RLS-filtered server-side |
 | `GET` | `/captures/<id>/styles?email=` | Scanned style codes for one capture |
 | `GET` | `/captures/<id>/photo?email=` | Inline photo (`as_attachment=False`) |
