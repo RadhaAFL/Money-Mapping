@@ -18,7 +18,7 @@ import pyodbc
 import threading
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -108,6 +108,37 @@ def _now_str() -> str:
 
 def _load_run_date() -> str:
     return datetime.utcnow().strftime('%Y%m%d%H%M%S')
+
+
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _is_today_ist(captured_at) -> bool:
+    """CAPTURED_AT is stored as naive UTC. A store's "day" is the Indian
+    calendar day, so compare dates in IST — comparing UTC dates would flip
+    a capture from "today" to "yesterday" at 5:30 AM IST."""
+    if captured_at is None:
+        return False
+    captured_day = captured_at.replace(tzinfo=timezone.utc).astimezone(_IST).date()
+    return captured_day == datetime.now(timezone.utc).astimezone(_IST).date()
+
+
+def _clean_styles(styles) -> list:
+    return [str(s).strip() for s in styles if str(s).strip()][:500]  # de-noise + cap
+
+
+def _parse_size(raw):
+    """Returns (size, error). Empty input is a valid "no size"."""
+    raw = str(raw or '').strip()
+    if not raw:
+        return None, None
+    try:
+        size = int(raw)
+        if size < 0:
+            raise ValueError
+        return size, None
+    except ValueError:
+        return None, "size must be a non-negative whole number"
 
 
 def _is_admin(email: str) -> bool:
@@ -261,7 +292,6 @@ def submit_capture():
     brand      = request.form.get('brand', 'FLYING MACHINE').strip().upper()
     fixture    = request.form.get('fixture_type', '').strip()
     fixture_label = request.form.get('fixture_label', '').strip() or None
-    size_raw   = request.form.get('size', '').strip()
     styles_raw = request.form.get('styles', '[]')
     photo      = request.files.get('photo')
 
@@ -272,14 +302,9 @@ def submit_capture():
     if not photo:
         return jsonify({"error": "photo is required"}), 400
 
-    size = None
-    if size_raw:
-        try:
-            size = int(size_raw)
-            if size < 0:
-                raise ValueError
-        except ValueError:
-            return jsonify({"error": "size must be a non-negative whole number"}), 400
+    size, size_err = _parse_size(request.form.get('size', ''))
+    if size_err:
+        return jsonify({"error": size_err}), 400
 
     try:
         styles = json.loads(styles_raw)
@@ -287,7 +312,7 @@ def submit_capture():
             raise ValueError
     except (ValueError, TypeError):
         return jsonify({"error": "styles must be a JSON array"}), 400
-    styles = [str(s).strip() for s in styles if str(s).strip()][:500]  # de-noise + cap
+    styles = _clean_styles(styles)
 
     capture_id = uuid.uuid4().hex
     photo_rel_path = '/'.join(['money_mapping', secure_filename(store_code), f"{capture_id}.jpg"])
@@ -412,6 +437,7 @@ def list_captures():
             "capture_id": r[0], "store_code": r[1], "brand": r[2], "fixture_type": r[3],
             "fixture_label": r[4], "size": r[5], "style_count": r[6], "status": r[7], "captured_at": str(r[8]),
             "submitted_by_email": r[9], "submitted_by_name": r[10],
+            "editable": _is_today_ist(r[8]),
         } for r in cursor.fetchall()]
     except Exception as e:
         print("List captures failed:", traceback.format_exc(), flush=True)
@@ -487,6 +513,118 @@ def capture_styles(capture_id):
         if conn is not None:
             conn.close()
     return jsonify({"styles": styles})
+
+
+def _capture_open_for_change(cursor, capture_id: str, email: str):
+    """Shared gate for editing/deleting a capture: it must exist, the caller
+    must have access to its store (same rule as submitting), and it must have
+    been submitted today (IST). Returns (row, error_response) — row is
+    (store_code, photo_path) when allowed."""
+    cursor.execute(
+        "SELECT XSTORE_STORECODE, PHOTO_PATH, CAPTURED_AT FROM prd.DIM_UI_MONEY_MAPPING_CAPTURE WHERE CAPTURE_ID=?",
+        [capture_id]
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None, (jsonify({"error": "Capture not found"}), 404)
+    store_code, photo_path, captured_at = row
+    if not _check_store_access(email, store_code):
+        return None, (jsonify({"error": "You do not have access to change captures for this store"}), 403)
+    if not _is_today_ist(captured_at):
+        return None, (jsonify({"error": "A capture can only be edited or deleted on the day it was submitted"}), 403)
+    return (store_code, photo_path), None
+
+
+@app.route('/captures/<capture_id>', methods=['PUT'])
+def update_capture(capture_id):
+    """Same-day edit of a capture's label, size and style list. The photo is
+    not replaceable here — a wrong photo means delete and re-capture."""
+    body = request.get_json(silent=True) or {}
+    email = str(body.get('email', '')).strip().lower()
+    fixture_label = str(body.get('fixture_label') or '').strip() or None
+    size, size_err = _parse_size(body.get('size'))
+    if size_err:
+        return jsonify({"error": size_err}), 400
+    styles = body.get('styles')
+    if not isinstance(styles, list):
+        return jsonify({"error": "styles must be a JSON array"}), 400
+    styles = _clean_styles(styles)
+
+    conn = None
+    try:
+        conn = _fab_conn()
+        conn.autocommit = False
+        cursor = conn.cursor()
+        row, err = _capture_open_for_change(cursor, capture_id, email)
+        if err:
+            return err
+        cursor.execute(
+            "UPDATE prd.DIM_UI_MONEY_MAPPING_CAPTURE SET FIXTURE_LABEL=?, [SIZE]=?, STYLE_COUNT=? WHERE CAPTURE_ID=?",
+            [fixture_label, size, len(styles), capture_id]
+        )
+        cursor.execute("DELETE FROM prd.DIM_UI_MONEY_MAPPING_CAPTURE_STYLE WHERE CAPTURE_ID=?", [capture_id])
+        if styles:
+            load_run_date = _load_run_date()
+            cursor.fast_executemany = True
+            cursor.executemany(
+                """
+                INSERT INTO prd.DIM_UI_MONEY_MAPPING_CAPTURE_STYLE
+                    (CAPTURE_ID, STYLE_BARCODE, SCAN_SEQ, LOAD_RUN_DATE)
+                VALUES (?, ?, ?, ?)
+                """,
+                [[capture_id, style, idx + 1, load_run_date] for idx, style in enumerate(styles)]
+            )
+        conn.commit()
+    except Exception as e:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        print("Capture update failed:", traceback.format_exc(), flush=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+    return jsonify({"status": "ok", "styles_saved": len(styles)})
+
+
+@app.route('/captures/<capture_id>', methods=['DELETE'])
+def delete_capture(capture_id):
+    """Same-day delete: removes the Fabric rows first, then the photo — if
+    the photo delete fails we leave an orphan file rather than a record
+    pointing at a missing photo."""
+    email = request.args.get('email', '').strip().lower()
+    conn = None
+    photo_path = None
+    try:
+        conn = _fab_conn()
+        conn.autocommit = False
+        cursor = conn.cursor()
+        row, err = _capture_open_for_change(cursor, capture_id, email)
+        if err:
+            return err
+        _, photo_path = row
+        cursor.execute("DELETE FROM prd.DIM_UI_MONEY_MAPPING_CAPTURE_STYLE WHERE CAPTURE_ID=?", [capture_id])
+        cursor.execute("DELETE FROM prd.DIM_UI_MONEY_MAPPING_CAPTURE WHERE CAPTURE_ID=?", [capture_id])
+        conn.commit()
+    except Exception as e:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        print("Capture delete failed:", traceback.format_exc(), flush=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+
+    try:
+        storage.delete(photo_path)
+    except Exception:
+        print("Photo delete failed (orphan left on SFTP):", photo_path, traceback.format_exc(), flush=True)
+    return jsonify({"status": "ok"})
 
 
 @app.route('/captures/<capture_id>/photo', methods=['GET'])

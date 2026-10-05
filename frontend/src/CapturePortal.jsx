@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 import { msalInstance } from './authConfig'
 import { logEvent } from './logger'
 import CategoryContributionPanel from './CategoryContributionPanel'
+import CaptureEditModal from './CaptureEditModal'
 import './CapturePortal.css'
 
 const API = '/moneymapping-api'
@@ -115,6 +116,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
   const [recentCaptures, setRecentCaptures] = useState([])
+  const [editing, setEditing] = useState(null) // { capture, startInDelete }
 
   const videoRef = useRef(null)
   const controlsRef = useRef(null)
@@ -153,7 +155,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
     if (!storeCode) return
     fetch(`${API}/captures?email=${encodeURIComponent(user.email)}&store_code=${encodeURIComponent(storeCode)}`)
       .then(r => r.json())
-      .then(d => setRecentCaptures((d.captures || []).slice(0, 6)))
+      .then(d => setRecentCaptures(d.captures || []))
       .catch(() => setRecentCaptures([]))
   }
   useEffect(loadRecentCaptures, [storeCode, user.email])
@@ -265,6 +267,8 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
     }
   }
 
+  const todayCaptures = useMemo(() => recentCaptures.filter(c => c.editable), [recentCaptures])
+  const earlierCaptures = useMemo(() => recentCaptures.filter(c => !c.editable).slice(0, 6), [recentCaptures])
   const storeOptions = useMemo(() => user.storeCodes, [user.storeCodes])
   const canReview = fixtureType && photoBlob && (fixtureLabels.length === 0 || fixtureLabel)
 
@@ -312,19 +316,53 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
             <CategoryContributionPanel user={user} storeCode={storeCode} />
 
             <div className="mm-field card">
-              <span className="eyebrow">Recent captures</span>
               {recentCaptures.length === 0 ? (
-                <p className="mm-cc-hint">No captures logged for this store yet.</p>
+                <>
+                  <span className="eyebrow">Recent captures</span>
+                  <p className="mm-cc-hint">No captures logged for this store yet.</p>
+                </>
               ) : (
-                <ul className="mm-recent-list">
-                  {recentCaptures.map(c => (
-                    <li key={c.capture_id}>
-                      <span className="msi">{(FIXTURE_META[c.fixture_type] || {}).icon || 'category'}</span>
-                      <span>{c.fixture_type}{c.fixture_label ? ` · ${c.fixture_label}` : ''}{c.size ? ` · Size ${c.size}` : ''}</span>
-                      <span className="mm-recent-date">{c.captured_at.slice(0, 10)}</span>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  {todayCaptures.length > 0 && (
+                    <>
+                      <span className="eyebrow">Today's captures</span>
+                      <p className="mm-cc-hint">Added something twice or got it wrong? You can edit or delete today's captures until midnight.</p>
+                      <ul className="mm-recent-list">
+                        {todayCaptures.map(c => (
+                          <li key={c.capture_id}>
+                            <span className="msi">{(FIXTURE_META[c.fixture_type] || {}).icon || 'category'}</span>
+                            <span className="mm-recent-text">
+                              {c.fixture_type}{c.fixture_label ? ` · ${c.fixture_label}` : ''}{c.size ? ` · Size ${c.size}` : ''}
+                              <span className="mm-recent-count"> · {c.style_count} style{c.style_count === 1 ? '' : 's'}</span>
+                            </span>
+                            <span className="mm-row-actions">
+                              <button className="mm-icon-btn" aria-label={`Edit ${c.fixture_type} ${c.fixture_label || ''}`} onClick={() => setEditing({ capture: c, startInDelete: false })}>
+                                <span className="msi">edit</span>
+                              </button>
+                              <button className="mm-icon-btn danger" aria-label={`Delete ${c.fixture_type} ${c.fixture_label || ''}`} onClick={() => setEditing({ capture: c, startInDelete: true })}>
+                                <span className="msi">delete</span>
+                              </button>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {earlierCaptures.length > 0 && (
+                    <>
+                      <span className="eyebrow">{todayCaptures.length > 0 ? 'Earlier captures' : 'Recent captures'}</span>
+                      <ul className="mm-recent-list">
+                        {earlierCaptures.map(c => (
+                          <li key={c.capture_id}>
+                            <span className="msi">{(FIXTURE_META[c.fixture_type] || {}).icon || 'category'}</span>
+                            <span className="mm-recent-text">{c.fixture_type}{c.fixture_label ? ` · ${c.fixture_label}` : ''}{c.size ? ` · Size ${c.size}` : ''}</span>
+                            <span className="mm-recent-date">{c.captured_at.slice(0, 10)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </>
               )}
             </div>
 
@@ -502,6 +540,16 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
           fixtureTypes={fixtureTypes}
           onPick={t => { setFixtureType(t); setPickerOpen(false); setView('capture') }}
           onCancel={() => setPickerOpen(false)}
+        />
+      )}
+
+      {editing && (
+        <CaptureEditModal
+          user={user}
+          capture={editing.capture}
+          startInDelete={editing.startInDelete}
+          onClose={() => setEditing(null)}
+          onChanged={() => { setEditing(null); loadRecentCaptures() }}
         />
       )}
     </div>

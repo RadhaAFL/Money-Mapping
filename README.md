@@ -173,6 +173,10 @@ Base path in production: `/moneymapping-api`
 | `POST` | `/captures` | multipart: `email, name, store_code, fixture_type, fixture_label (optional), size (optional, whole number), styles (JSON array), photo` |
 | `GET` | `/captures?email=&store_code=&fixture_type=&from_date=&to_date=` | List, RLS-filtered server-side |
 | `GET` | `/captures/<id>/styles?email=` | Scanned style codes for one capture |
+| `PUT` | `/captures/<id>` | JSON `{email, fixture_label, size, styles[]}` — **same-day only** edit of a capture's label, size and style list (photo is not replaceable; delete and re-capture instead) |
+| `DELETE` | `/captures/<id>?email=` | **Same-day only** delete — removes the Fabric rows, then the SFTP photo |
+
+"Same day" means the Indian calendar day (IST) of `CAPTURED_AT`, checked on the server (`_is_today_ist`); `GET /captures` returns an `editable` flag per row so the UI only offers the controls where they'll work. Edit/delete use the same store-access check as submitting (store login, or an admin on a pilot store) — after midnight IST a capture is locked for everyone, admins included.
 | `GET` | `/captures/<id>/photo?email=` | Inline photo (`as_attachment=False`) |
 | `GET` | `/captures/summary?email=` | Admin-only: network coverage for the current month — total stores (`dbo.DIM_RLS`), stores with a capture, total capture count |
 | `POST` | `/planograms` | Admin-only, multipart: `caller_email, email, store_code, effective_date, file` — one whole-store blueprint layout, replaces that store's existing blueprint |
