@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { istToday, istDaysAgo, utcToIst } from './dates'
 import './ReviewPortal.css'
 
 const API = '/moneymapping-api'
@@ -25,7 +26,7 @@ function CaptureDetail({ user, capture, onClose }) {
         />
         <div className="mm-detail-meta">
           <div><strong>{capture.store_code}</strong> — {capture.fixture_type}{capture.fixture_label ? ` (${capture.fixture_label})` : ''}{capture.size ? ` · Size ${capture.size}` : ''}</div>
-          <div className="mm-detail-sub">{capture.submitted_by_name || capture.submitted_by_email} · {capture.captured_at}</div>
+          <div className="mm-detail-sub">{capture.submitted_by_name || capture.submitted_by_email} · {(() => { const t = utcToIst(capture.captured_at); return `${t.date} ${t.time} IST` })()}</div>
         </div>
         <div className="mm-detail-styles">
           <div className="mm-detail-styles-label">{styles.length} style{styles.length === 1 ? '' : 's'} scanned</div>
@@ -181,31 +182,55 @@ export default function ReviewPortal({ user }) {
   const [fixtureTypes, setFixtureTypes] = useState([])
   const [storeCode, setStoreCode] = useState('')
   const [fixtureType, setFixtureType] = useState('')
+  // Opens on today so Head Office isn't handed every capture ever taken.
+  const [fromDate, setFromDate] = useState(istToday)
+  const [toDate, setToDate] = useState(istToday)
   const [captures, setCaptures] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState(null)
+  const latestRequest = useRef(0)
 
   useEffect(() => {
     fetch(`${API}/fixture-types`).then(r => r.json()).then(d => setFixtureTypes(d.fixture_types || []))
   }, [])
 
   const load = () => {
+    const requestId = ++latestRequest.current
     setLoading(true); setError('')
     const params = new URLSearchParams({ email: user.email })
     if (storeCode) params.set('store_code', storeCode)
     if (fixtureType) params.set('fixture_type', fixtureType)
+    if (fromDate) params.set('from_date', fromDate)
+    if (toDate) params.set('to_date', toDate)
     fetch(`${API}/captures?${params}`)
       .then(r => r.json())
       .then(d => {
+        if (requestId !== latestRequest.current) return // a newer filter change superseded this one
         if (d.error) throw new Error(d.error)
         setCaptures(d.captures || [])
       })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
+      .catch(e => { if (requestId === latestRequest.current) setError(e.message) })
+      .finally(() => { if (requestId === latestRequest.current) setLoading(false) })
   }
 
-  useEffect(load, [storeCode, fixtureType])
+  useEffect(load, [storeCode, fixtureType, fromDate, toDate])
+
+  const today = istToday()
+  const presets = [
+    { label: 'Today', from: today, to: today },
+    { label: 'Yesterday', from: istDaysAgo(1), to: istDaysAgo(1) },
+    { label: 'Last 7 days', from: istDaysAgo(6), to: today },
+    { label: 'All dates', from: '', to: '' },
+  ]
+
+  // Keep the range coherent: moving one end past the other drags the other along.
+  const changeFrom = v => { setFromDate(v); if (v && toDate && v > toDate) setToDate(v) }
+  const changeTo = v => { setToDate(v); if (v && fromDate && v < fromDate) setFromDate(v) }
+
+  const rangeLabel = !fromDate && !toDate ? 'all dates'
+    : fromDate === toDate ? fromDate
+    : `${fromDate || 'start'} to ${toDate || 'today'}`
 
   return (
     <div className="mm-review-page">
@@ -228,12 +253,39 @@ export default function ReviewPortal({ user }) {
           </select>
         </div>
 
+        <div className="mm-review-dates">
+          <div className="mm-chip-row">
+            {presets.map(p => (
+              <button
+                key={p.label}
+                className={fromDate === p.from && toDate === p.to ? 'mm-chip active' : 'mm-chip'}
+                onClick={() => { setFromDate(p.from); setToDate(p.to) }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <label className="mm-date-field">
+            <span>From</span>
+            <input type="date" value={fromDate} max={today} onChange={e => changeFrom(e.target.value)} />
+          </label>
+          <label className="mm-date-field">
+            <span>To</span>
+            <input type="date" value={toDate} max={today} onChange={e => changeTo(e.target.value)} />
+          </label>
+        </div>
+
         {error && <div className="error-bar">{error}</div>}
         {loading && <div className="mm-review-state">Loading…</div>}
+        {!loading && !error && (
+          <div className="mm-review-count">
+            <strong>{captures.length}</strong> capture{captures.length === 1 ? '' : 's'} · {rangeLabel} <span className="mm-review-tz">(IST)</span>
+          </div>
+        )}
         {!loading && captures.length === 0 && !error && (
           <div className="mm-review-state">
-            <span className="msi">add_a_photo</span>
-            No captures match these filters yet.
+            <span className="msi">event_busy</span>
+            No captures for {rangeLabel}. Pick another date or choose "All dates".
           </div>
         )}
 
@@ -248,7 +300,7 @@ export default function ReviewPortal({ user }) {
               />
               <div className="mm-capture-card-body">
                 <div className="mm-capture-card-title">{c.store_code} · {c.fixture_type}{c.fixture_label ? ` (${c.fixture_label})` : ''}{c.size ? ` · Size ${c.size}` : ''}</div>
-                <div className="mm-capture-card-sub">{c.style_count} styles · {c.captured_at.slice(0, 10)}</div>
+                <div className="mm-capture-card-sub">{c.style_count} styles · {(() => { const t = utcToIst(c.captured_at); return `${t.date} ${t.time}` })()}</div>
               </div>
             </div>
           ))}

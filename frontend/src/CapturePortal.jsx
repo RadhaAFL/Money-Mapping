@@ -5,6 +5,7 @@ import { msalInstance } from './authConfig'
 import { logEvent } from './logger'
 import CategoryContributionPanel from './CategoryContributionPanel'
 import CaptureEditModal from './CaptureEditModal'
+import { utcToIst } from './dates'
 import './CapturePortal.css'
 
 const API = '/moneymapping-api'
@@ -356,7 +357,7 @@ export default function CapturePortal({ user, allowAnyStore = false, embedded = 
                           <li key={c.capture_id}>
                             <span className="msi">{(FIXTURE_META[c.fixture_type] || {}).icon || 'category'}</span>
                             <span className="mm-recent-text">{c.fixture_type}{c.fixture_label ? ` · ${c.fixture_label}` : ''}{c.size ? ` · Size ${c.size}` : ''}</span>
-                            <span className="mm-recent-date">{c.captured_at.slice(0, 10)}</span>
+                            <span className="mm-recent-date">{utcToIst(c.captured_at).date}</span>
                           </li>
                         ))}
                       </ul>

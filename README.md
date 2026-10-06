@@ -171,7 +171,7 @@ Base path in production: `/moneymapping-api`
 | `GET` | `/fixture-types` | Static list of the 7 fixture types |
 | `GET` | `/stores?email=` | Admin-only: every distinct store code in `dbo.DIM_RLS` — lets an admin capture on behalf of any store, since admins already bypass the store-access check |
 | `POST` | `/captures` | multipart: `email, name, store_code, fixture_type, fixture_label (optional), size (optional, whole number), styles (JSON array), photo` |
-| `GET` | `/captures?email=&store_code=&fixture_type=&from_date=&to_date=` | List, RLS-filtered server-side |
+| `GET` | `/captures?email=&store_code=&fixture_type=&from_date=&to_date=` | List, RLS-filtered server-side. `from_date`/`to_date` are inclusive `YYYY-MM-DD` Indian (IST) calendar days — `CAPTURED_AT` is UTC, so the filter shifts it +5:30 first; a malformed date returns 400. The Head Office review screen opens on "Today" with Yesterday / Last 7 days / All dates presets. |
 | `GET` | `/captures/<id>/styles?email=` | Scanned style codes for one capture |
 | `PUT` | `/captures/<id>` | JSON `{email, fixture_label, size, styles[]}` — **same-day only** edit of a capture's label, size and style list (photo is not replaceable; delete and re-capture instead) |
 | `DELETE` | `/captures/<id>?email=` | **Same-day only** delete — removes the Fabric rows, then the SFTP photo |

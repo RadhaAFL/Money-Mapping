@@ -15,6 +15,7 @@ import io
 import json
 import os
 import pyodbc
+import re
 import threading
 import traceback
 import uuid
@@ -384,8 +385,11 @@ def list_captures():
     is_admin = _is_admin(email)
     requested_store = _normalize_store_code(request.args.get('store_code', ''))
     fixture = request.args.get('fixture_type', '').strip()
-    from_date = request.args.get('from_date', '')
-    to_date = request.args.get('to_date', '')
+    from_date = request.args.get('from_date', '').strip()
+    to_date = request.args.get('to_date', '').strip()
+    for d in (from_date, to_date):
+        if d and not re.fullmatch(r'\d{4}-\d{2}-\d{2}', d):
+            return jsonify({"error": "from_date/to_date must be YYYY-MM-DD"}), 400
 
     if is_admin:
         allowed_stores = None  # no restriction
@@ -411,11 +415,13 @@ def list_captures():
     if fixture:
         conditions.append("FIXTURE_TYPE = ?")
         params.append(fixture)
+    # Dates are Indian calendar days: CAPTURED_AT is stored as UTC, so shift
+    # by +5:30 first — otherwise a 1 AM IST capture lands on the previous day.
     if from_date:
-        conditions.append("CAST(CAPTURED_AT AS DATE) >= ?")
+        conditions.append("CAST(DATEADD(minute, 330, CAPTURED_AT) AS DATE) >= ?")
         params.append(from_date)
     if to_date:
-        conditions.append("CAST(CAPTURED_AT AS DATE) <= ?")
+        conditions.append("CAST(DATEADD(minute, 330, CAPTURED_AT) AS DATE) <= ?")
         params.append(to_date)
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
