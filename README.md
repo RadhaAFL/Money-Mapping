@@ -306,3 +306,63 @@ sudo systemctl restart money-mapping-api
 sudo apachectl configtest
 sudo systemctl reload apache2
 ```
+
+## Shared VM notes
+
+This VM also runs other teams' stacks (SEMANTIC-LAYER, ai-da-agents, Langfuse,
+Streamlit, ...). Nothing below is deployed by this repo; it's recorded here so
+it isn't lost.
+
+### Langfuse ClickHouse log cap (applied 2026-10-12)
+
+**Why.** The disk climbed to 62% because ClickHouse inside the Langfuse stack
+(`/opt/langfuse`, containers `langfuse-*`) was logging about 40 GB to its own
+internal tables (`system.trace_log` 19.5 GB, `text_log` 12.8 GB, plus four more),
+with no expiry. Langfuse's own data was tiny (106 traces, 244 observations) and
+has had no new traces since 2026-06-18. The only app wired to it is ai-da-agents
+(production, `LANGFUSE_HOST=http://host.docker.internal:3000`); its tracing
+config and keys are valid, there is just no chat traffic. Money Mapping and
+SEMANTIC-LAYER have no connection to this ClickHouse (not on its Docker network,
+no code or Apache config references it).
+
+**What was done.** The six big log tables (`trace_log`, `text_log`, `metric_log`,
+`part_log`, `asynchronous_metric_log`, `histogram_metric_log`) were emptied, then
+capped at 7 days with this file inside the ClickHouse container at
+`/etc/clickhouse-server/config.d/zz-system-log-ttl.xml`:
+
+```xml
+<clickhouse>
+    <trace_log><ttl>event_date + INTERVAL 7 DAY DELETE</ttl></trace_log>
+    <text_log><ttl>event_date + INTERVAL 7 DAY DELETE</ttl></text_log>
+    <metric_log><ttl>event_date + INTERVAL 7 DAY DELETE</ttl></metric_log>
+    <part_log><ttl>event_date + INTERVAL 7 DAY DELETE</ttl></part_log>
+    <asynchronous_metric_log><ttl>event_date + INTERVAL 7 DAY DELETE</ttl></asynchronous_metric_log>
+    <histogram_metric_log><ttl>event_date + INTERVAL 7 DAY DELETE</ttl></histogram_metric_log>
+</clickhouse>
+```
+
+Result: disk 62% -> 29% (76 GB -> 36 GB used); the ClickHouse data volume went
+from 43 GB to about 140 MB, and should level off around 2 GB.
+
+**It can silently stop working.** ClickHouse only applies a log-table TTL from
+config when it *creates* the table, and the file lives in the container's own
+filesystem, not in a volume. A plain `docker restart` keeps it, but recreating
+the container (`docker compose up --force-recreate`, an image upgrade) discards
+it and the logs will grow again without any error. Check with:
+
+```bash
+sudo docker exec langfuse-clickhouse-1 ls /etc/clickhouse-server/config.d   # expect zz-system-log-ttl.xml
+sudo docker system df -v | grep clickhouse_data                            # expect a few GB, not tens
+```
+
+**To re-apply.** In this order, so the config is loaded before the tables are
+recreated: (1) `docker cp` the file above into `config.d/`; (2) `docker restart
+langfuse-clickhouse-1`; (3) `DROP TABLE system.<name>` for each of the six, then
+`SYSTEM FLUSH LOGS`, which recreates them with the TTL (run the SQL with
+`docker exec langfuse-clickhouse-1 sh -c 'clickhouse-client --user "$CLICKHOUSE_USER"
+--password "$CLICKHOUSE_PASSWORD" -q "..."'` so the password never leaves the
+container). Confirm with `SHOW CREATE TABLE system.trace_log`, which should
+include `TTL event_date + toIntervalDay(7)`. If ClickHouse sets a `<name>_0` copy
+aside on a later restart, it is a tiny leftover and can be dropped.
+The durable fix is a bind mount of that file in `/opt/langfuse/docker-compose.yml`;
+that file belongs to the Langfuse/ai-da-agents owners, so it was left alone.
