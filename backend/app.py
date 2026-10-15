@@ -51,6 +51,7 @@ def get_con() -> "duckdb.DuckDBPyConnection":
 load_dotenv(Path(__file__).resolve().parent.parent / '.env')
 
 import sftp_storage as storage  # noqa: E402 — reads SFTP_* env vars at import, must follow load_dotenv()
+from image_chunks import build_chunks  # noqa: E402
 
 _FAB_HOST = os.environ.get('FABRIC_DB_HOST', '')
 _FAB_PORT = int(os.environ.get('FABRIC_DB_PORT', 1433))
@@ -319,13 +320,20 @@ def submit_capture():
     photo_rel_path = '/'.join(['money_mapping', secure_filename(store_code), f"{capture_id}.jpg"])
     photo_bytes = photo.read()
 
+    # Built before anything is written so an unreadable photo fails cleanly.
+    try:
+        image_chunks = build_chunks(photo_bytes)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
     conn = None
     uploaded = False
     try:
         storage.upload(photo_bytes, photo_rel_path)
         uploaded = True
         conn = _fab_conn()
-        conn.autocommit = True
+        # One transaction: capture, styles and image chunks all land, or none do.
+        conn.autocommit = False
         cursor = conn.cursor()
         load_run_date = _load_run_date()
         cursor.execute(
@@ -351,12 +359,27 @@ def submit_capture():
                 """,
                 rows
             )
+        cursor.fast_executemany = True
+        cursor.executemany(
+            """
+            INSERT INTO prd.DIM_UI_MONEY_MAPPING_IMAGE_CHUNKS
+                (CAPTURE_ID, CHUNK_INDEX, CHUNK, LOAD_RUN_DATE)
+            VALUES (?, ?, ?, ?)
+            """,
+            [[capture_id, idx, chunk, load_run_date] for idx, chunk in enumerate(image_chunks)]
+        )
         cursor.execute(
             "SELECT COUNT(*) FROM prd.DIM_UI_MONEY_MAPPING_CAPTURE WHERE CAPTURE_ID=?",
             [capture_id]
         )
         verified = int(cursor.fetchone()[0])
+        conn.commit()
     except Exception as e:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         # Don't leave an orphaned photo behind if the Fabric write failed.
         if uploaded:
             try:
@@ -612,6 +635,7 @@ def delete_capture(capture_id):
             return err
         _, photo_path = row
         cursor.execute("DELETE FROM prd.DIM_UI_MONEY_MAPPING_CAPTURE_STYLE WHERE CAPTURE_ID=?", [capture_id])
+        cursor.execute("DELETE FROM prd.DIM_UI_MONEY_MAPPING_IMAGE_CHUNKS WHERE CAPTURE_ID=?", [capture_id])
         cursor.execute("DELETE FROM prd.DIM_UI_MONEY_MAPPING_CAPTURE WHERE CAPTURE_ID=?", [capture_id])
         conn.commit()
     except Exception as e:

@@ -35,6 +35,21 @@ CREATE TABLE prd.DIM_UI_MONEY_MAPPING_CAPTURE_STYLE (
     LOAD_RUN_DATE  VARCHAR(20)  NOT NULL
 );
 
+-- A small copy of each capture photo as text, so Power BI can show it (it can't
+-- read files on SFTP). Written by the app at submit time from the same recipe as
+-- the Fabric notebook behind Lakehouse table dim_money_mapping_image_chunks:
+-- 500px JPEG, quality 80, base64 "data:image/jpeg;base64,..." split into
+-- 7,500-character pieces (the SQL endpoint caps text at 8,000). A Power BI
+-- measure re-joins one capture's pieces in CHUNK_INDEX order. The full-size
+-- original stays on SFTP (CAPTURE.PHOTO_PATH). Rebuildable any time from SFTP with
+-- backend/backfill_image_chunks.py.
+CREATE TABLE prd.DIM_UI_MONEY_MAPPING_IMAGE_CHUNKS (
+    CAPTURE_ID     VARCHAR(64)   NOT NULL,   -- joins to CAPTURE.CAPTURE_ID (same as the photo's file name)
+    CHUNK_INDEX    INT           NOT NULL,   -- 0-based order of the pieces
+    CHUNK          VARCHAR(8000) NOT NULL,   -- <= 7,500 characters of the data URI
+    LOAD_RUN_DATE  VARCHAR(20)   NOT NULL
+);
+
 -- One whole-store blueprint layout (e.g. "PMC Bangalore - Layout"), not
 -- split per fixture type — re-uploading for a store replaces its blueprint.
 CREATE TABLE prd.DIM_UI_MONEY_MAPPING_PLANOGRAM (

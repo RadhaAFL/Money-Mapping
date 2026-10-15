@@ -69,6 +69,35 @@ SFTP server (`backend/sftp_storage.py`), not on this VM's disk — Fabric's
 files over SFTP on every request (no local caching yet — see that file's
 docstring for the one-connection-per-call rationale).
 
+### Photos in Power BI
+
+Power BI can't read files on SFTP, so at submit time the backend also writes a
+small text copy of each capture photo to
+`prd.DIM_UI_MONEY_MAPPING_IMAGE_CHUNKS` (`CAPTURE_ID`, `CHUNK_INDEX`, `CHUNK`):
+500px JPEG at quality 80, base64 as `data:image/jpeg;base64,...`, split into
+7,500-character pieces (the SQL endpoint caps text at 8,000). This is the same
+recipe as the Fabric notebook behind Lakehouse table
+`dim_money_mapping_image_chunks` (`backend/image_chunks.py` — keep the two in
+step), so one measure works for both. Capture, styles and chunks are written in
+one transaction, a same-day delete removes all three, and the full-size photo
+stays on SFTP. To show it, relate `IMAGE_CHUNKS[CAPTURE_ID]` to
+`CAPTURE[CAPTURE_ID]` and use a measure like the one below, with its data
+category set to *Image URL*:
+
+```dax
+Capture Photo =
+CONCATENATEX (
+    'DIM_UI_MONEY_MAPPING_IMAGE_CHUNKS',
+    'DIM_UI_MONEY_MAPPING_IMAGE_CHUNKS'[CHUNK],
+    "",
+    'DIM_UI_MONEY_MAPPING_IMAGE_CHUNKS'[CHUNK_INDEX], ASC
+)
+```
+
+`python backend/backfill_image_chunks.py` loads chunks for captures that don't
+have them yet (`--dry-run` to preview, `--rebuild` to regenerate everything
+from SFTP after changing the recipe).
+
 ## Project structure
 
 ```text
@@ -76,6 +105,8 @@ Money_Mapping/
   backend/
     app.py               # Flask API — access control, captures, planograms
     sftp_storage.py       # capture-photo / planogram file storage over SFTP
+    image_chunks.py       # photo -> 500px base64 text pieces for Power BI
+    backfill_image_chunks.py  # load/rebuild those pieces from the photos on SFTP
     requirements.txt
     .env.example
   frontend/
@@ -174,7 +205,7 @@ Base path in production: `/moneymapping-api`
 | `GET` | `/captures?email=&store_code=&fixture_type=&from_date=&to_date=` | List, RLS-filtered server-side. `from_date`/`to_date` are inclusive `YYYY-MM-DD` Indian (IST) calendar days — `CAPTURED_AT` is UTC, so the filter shifts it +5:30 first; a malformed date returns 400. The Head Office review screen opens on "Today" with Yesterday / Last 7 days / All dates presets. |
 | `GET` | `/captures/<id>/styles?email=` | Scanned style codes for one capture |
 | `PUT` | `/captures/<id>` | JSON `{email, fixture_label, size, styles[]}` — **same-day only** edit of a capture's label, size and style list (photo is not replaceable; delete and re-capture instead) |
-| `DELETE` | `/captures/<id>?email=` | **Same-day only** delete — removes the Fabric rows, then the SFTP photo |
+| `DELETE` | `/captures/<id>?email=` | **Same-day only** delete — removes the Fabric rows (capture, styles, image chunks), then the SFTP photo |
 
 "Same day" means the Indian calendar day (IST) of `CAPTURED_AT`, checked on the server (`_is_today_ist`); `GET /captures` returns an `editable` flag per row so the UI only offers the controls where they'll work. Edit/delete use the same store-access check as submitting (store login, or an admin on a pilot store) — after midnight IST a capture is locked for everyone, admins included.
 | `GET` | `/captures/<id>/photo?email=` | Inline photo (`as_attachment=False`) |
